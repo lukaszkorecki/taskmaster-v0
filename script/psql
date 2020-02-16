@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+docker run --net=host \
+       -ePGPASSWORD=password \
+       --rm \
+       -it \
+       postgres:9.6 psql -h 127.0.0.1 -p 5438 -U taskmaster -d ${1:-taskmaster}
