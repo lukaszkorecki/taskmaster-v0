@@ -1,48 +1,32 @@
-(require '[taskmaster.connection :as c]
-         '[clojure.tools.logging :as log]
-         '[utility-belt.sql.helpers :as sql]
-         '[taskmaster.core :as q] :reload)
+(require '[taskmaster.queue :as queue]
+         '[taskmaster.connection :as c]
+         '[clojure.tools.logging :as log])
+
 
 (def c1 (.start (c/make-one)))
 (def c2 (.start (c/make-one)))
 
 
-(q/create-jobs-table! c1)
+(def id-log (atom []))
 
-(defn notify-callback [args]
-  (log/info (q/queue-size c2 {:queue-name "test_queue"}))
-  (if (empty? args)
-    (log/warn "no jobs")
-    (let [jobs (q/lock! c2 {:queue-name "test_queue"})]
-      (mapv (fn [job]
-              (log/infof "job %s" (:id job))
-              (q/delete-job! c2 {:id (:id job)})
-              (q/unlock! c2 {:id (:id job)})) jobs))))
+(defn callback [job]
+  (log/infof "got-job %s" job)
+  (swap! id-log conj (:id job))
+  (if (and (:some-number job) (even? (:some-number job)))
+    :taskmaster.queue/ack
+    :taskmaster.queue/reject))
 
-(def listener
-  (Thread.
-   (fn []
-     (q/listen c1 {:queue-name "test_queue"
-                   :callback notify-callback}))
-   "listener-1"))
+(def work-pool (queue/create-worker-pool c1 {:queue-name "test_queue_1"
+                                             :concurrency 2
+                                             :callback (queue/with-worker-callback c2 {:queue-name "test_queue_1"
+                                                                                       :callback callback})}))
 
+(queue/start! work-pool)
+(queue/stop! work-pool)
 
+(queue/put! c2 {:queue-name "test_queue_1" :payload { :some-number 200 :msg :hello}})
 
-(def listener2
-  (Thread.
-   (fn []
-     (q/listen c1 {:queue-name "test_queue"
-                   :callback notify-callback }))
-   "listener-2"
-   ))
+(first (deref id-log))
+(count (set (deref id-log)))
 
-(.stop listener)
-(.stop listener2)
-(q/put! c2 {:queue-name "test_queue" :payload {:hi :there :time (str (java.time.LocalDateTime/now))}})
-(.start listener)
-(.start listener2)
-
-(.stop listener2)
-
-
-(q/delete-all! c2 {:queue-name "test_queue"})
+(reset! id-log [])

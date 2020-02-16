@@ -1,4 +1,4 @@
-(ns taskmaster.core
+(ns taskmaster.operation
   (:require [utility-belt.sql.conv] ;; load coercions
             [utility-belt.sql.model :as model]
             [clojure.tools.logging :as log])
@@ -46,10 +46,8 @@
 (defn queue-size [conn {:keys [queue-name]}]
   (queue-size* conn {:table-name *job-table-name* :queue-name queue-name}))
 
-
-(defn listen [conn {:keys [queue-name callback] :as opts}]
+(defn listen-and-notify [conn {:keys [queue-name callback on-error interval-ms] :as opts}]
   (try
-    (log/info "Init notification listen.")
     (while true
       (let [raw-conn (-> conn :datasource .getConnection)
             pg-conn (.unwrap raw-conn PGConnection)]
@@ -59,7 +57,10 @@
              (map #(.getParameter %))
              callback)
         (.close raw-conn)
-        (Thread/sleep 1000)))
+        (Thread/sleep (or interval-ms 1000))))
     (catch Exception e
-      (log/error "Listen notify error: \n" e)))
+      (log/error "Listen notify error: \n" e)
+      (if on-error
+        (on-error {:queue-name queue-name :error e})
+        (throw e))))
   (recur conn opts))
