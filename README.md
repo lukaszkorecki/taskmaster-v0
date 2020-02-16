@@ -7,3 +7,10 @@ Postgres based background processing worker system thing.
 Built on top of `next.jdbc`, `hikari-cp` and `hugsql`
 
 :warning: Definitely not usable yet, see `src/taskmaster/scratch.clj` for details
+
+
+Inspired by:
+
+- https://github.com/QueueClassic/queue_classic
+- https://pypi.org/project/pq/
+- https://gist.github.com/zarkone/98eb53e4e1f0833b22faa28a1da77ed7
