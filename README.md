@@ -1,21 +1,9 @@
 # taskmaster
-[![Build Status](https://travis-ci.org/lukaszkorecki/taskmaster.svg?branch=master)](https://travis-ci.org/lukaszkorecki/taskmaster)
-[![codecov](https://codecov.io/gh/lukaszkorecki/taskmaster/branch/master/graph/badge.svg)](https://codecov.io/gh/lukaszkorecki/taskmaster)
-[![Clojars Project](https://img.shields.io/clojars/v/taskmaster.svg)](https://clojars.org/taskmaster)
 
-A Clojure library designed to ... well, that part is up to you.
+<img src="https://img.cinemablend.com/filter:scale/quill/b/3/6/2/9/9/b36299d3e49f972d430cae647b5bec83ad70eae8.jpg?mw=600" align="right" width=250 >
 
-```clj
-[taskmaster "0.0.0"]
-```
+Postgres based background processing worker system thing.
 
-## Usage
+Built on top of `next.jdbc`, `hikari-cp` and `hugsql`
 
-FIXME
-
-## License
-
-Copyright © 2018 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+:warning: Definitely not usable yet, see `src/taskmaster/scratch.clj` for details
