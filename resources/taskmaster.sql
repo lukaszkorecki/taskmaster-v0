@@ -23,6 +23,11 @@ CREATE TRIGGER taskmaster_jobs_notify
   EXECUTE PROCEDURE taskmaster_jobs_notify();
 
 
+-- :name ping* :? :1
+
+select 1
+
+
 -- :name unlock-dead-workers*! :!
 
 UPDATE :i:table-name

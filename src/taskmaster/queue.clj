@@ -7,16 +7,17 @@
 (defn with-worker-callback [conn {:keys [queue-name callback]}]
   (fn worker-callback [notification]
     (if (empty? notification)
-      (log/debug "state=noop")
+      (log/info "state=noop")
       (sql/with-transaction [tx conn]
         (let [jobs (op/lock! tx {:queue-name queue-name})]
           (mapv (fn run-job [{:keys [id] :as job}]
-                  (log/debugf "job-id=%s start" id)
-                  (when (= ::ack (callback job))
-                    (log/debugf "job-id=%s ack" id)
-                    (op/delete-job! tx {:id id}))
-                  (log/debugf "job-id=%s unlock" id)
-                  (op/unlock! tx {:id id}))
+                  (log/infof "job-id=%s start" id)
+                  (let [res (callback job)]
+                    (log/infof "job-id=%s res=%s" id res)
+                    (when (= ::ack res)
+                      (log/infof "job-id=%s ack delete=%s" id
+                                 (op/delete-job! tx {:id id}))))
+                  (log/infof "job-id=%s unlock %s" id (op/unlock! tx {:id id})))
                 jobs))))))
 
 

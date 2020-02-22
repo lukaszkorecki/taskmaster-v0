@@ -2,17 +2,17 @@
   (:require [utility-belt.sql.conv] ;; load coercions
             [utility-belt.sql.model :as model]
             [clojure.tools.logging :as log])
-  (:import (org.postgresql PGConnection)))
+  (:import (org.postgresql PGConnection PGNotification)))
 
-(declare
-  create-jobs-table*!
-  unlock-dead-workers*!
-  put*!
-  lock*!
-  unlock*!
-  delete-job*!
-  delete-all*!
-  queue-size*)
+(declare ping*
+         create-jobs-table*!
+         unlock-dead-workers*!
+         put*!
+         lock*!
+         unlock*!
+         delete-job*!
+         delete-all*!
+         queue-size*)
 
 (model/load-sql-file "taskmaster.sql" {:mode :kebab-maps})
 
@@ -48,19 +48,18 @@
 
 (defn listen-and-notify [conn {:keys [queue-name callback on-error interval-ms] :as opts}]
   (try
-    (while true
-      (let [raw-conn (-> conn :datasource .getConnection)
-            pg-conn (.unwrap raw-conn PGConnection)]
-        (listen* raw-conn {:queue-name queue-name})
+    (let [raw-conn (-> conn :datasource .getConnection)
+          pg-conn (.unwrap raw-conn PGConnection)]
+      (ping* pg-conn)
+      (listen* pg-conn {:queue-name queue-name})
+      (while true
         (->> pg-conn
              .getNotifications
              (map #(.getParameter %))
              callback)
-        (.close raw-conn)
-        (Thread/sleep (or interval-ms 1000))))
+        (Thread/sleep (or interval-ms 500))))
     (catch Exception e
       (log/error "Listen notify error: \n" e)
       (if on-error
         (on-error {:queue-name queue-name :error e})
-        (throw e))))
-  (recur conn opts))
+        (throw e)))))
