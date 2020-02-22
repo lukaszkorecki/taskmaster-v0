@@ -14,18 +14,11 @@
     (log/info res)
     res))
 
-(def work-pool (queue/create-worker-pool
+(def work-pool (queue/start!
                 c1
                 {:queue-name "test_queue_1"
                  :concurrency 2
                  :callback callback}))
 
-
-
-
-
 (lc/register-shutdown-hook :stop-worker #(queue/stop! work-pool))
 (lc/install-shutdown-hooks!)
-
-
-(queue/start! work-pool)

@@ -2,7 +2,8 @@
   (:require [clojure.tools.logging :as log]
             [utility-belt.sql.helpers :as sql]
             [clojure.string :as str]
-            [taskmaster.operation :as op]))
+            [taskmaster.operation :as op])
+  (:import (java.util.concurrent Executors TimeUnit)))
 
 (defn with-worker-callback
   "Wrap the callback function in such a way, that it deletes the jobs
@@ -25,50 +26,32 @@
                       (log/debugf "job-id=%s unlock %s" id unlock-res))))
                 jobs))))))
 
-(defprotocol IWorker
-  (start [_])
-  (stop [_]))
 
-(defrecord Worker [name queue-name thread]
-  IWorker
-  (start [_]
-    (log/infof "worker=%s start" name)
-    (.start ^Thread thread))
-  (stop [_]
-    (log/warnf "worker=%s stop" name)
-    (.stop ^Thread thread)))
-
-(defn create-worker-thread [conn {:keys [name queue-name callback]}]
-  (if-let [thread (Thread.
-                         #(op/listen-and-notify conn {:queue-name queue-name :callback callback})
-                         name)]
-    (map->Worker {:thread thread :queue-name queue-name :name name})
-    (throw (ex-info "Failed to create worker thread" {:name name :queue-name queue-name}))))
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
   [q]
   (and (not (str/blank? q))
        (not (re-find #"\." q))))
 
-(defn create-worker-pool [conn {:keys [queue-name callback concurrency]}]
+(defn start! [conn {:keys [queue-name callback concurrency]}]
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
+  (let [pool (Executors/newFixedThreadPool concurrency)]
+    (log/info "starting queue=%s" queue-name)
   (mapv (fn [i]
           (let [name (str "taskmaster-" queue-name "-" i)
                 cb (with-worker-callback conn {:queue-name queue-name
                                                :callback callback})]
-            (create-worker-thread conn {:queue-name queue-name
-                                        :callback cb
-                                        :name name})))
-        (range 0 concurrency)))
+            (log/info "thread=%s" name)
+            (.submit pool ^Runnable #(op/listen-and-notify conn {:queue-name queue-name :callback cb}))))
+        (range 0 concurrency))
+  pool))
 
-(defn start! [workers]
-  (mapv start workers))
-
-(defn stop! [workers]
-  (log/info workers)
-  (mapv stop workers))
+(defn stop! [pool]
+  (log/infof "pool=%s stopping" pool)
+  (.awaitTermination pool 5 TimeUnit/SECONDS)
+  (.shutdownNow pool))
 
 (defn put! [conn {:keys [queue-name payload]}]
   (op/put! conn {:queue-name queue-name

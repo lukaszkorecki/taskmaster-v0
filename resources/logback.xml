@@ -5,7 +5,9 @@
     </encoder>
   </appender>
 
-  <root level="info">
+  <logger name="com.zaxxer.hikari" level="error" />
+
+  <root level="debug">
     <appender-ref ref="STDOUT" />
   </root>
 </configuration>

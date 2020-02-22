@@ -28,11 +28,11 @@
 (defn start-queue! []
   (reset! p
           (queue/start!
-           (queue/create-worker-pool
+
             @pg1
             {:queue-name queue
              :concurrency 2
-             :callback callback}))))
+             :callback callback})))
 
 (defn cleanup! []
   (queue/stop! @p)
