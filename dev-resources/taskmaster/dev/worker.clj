@@ -1,5 +1,6 @@
 (require '[taskmaster.queue :as queue]
          '[taskmaster.dev.connection :as c]
+         '[utility-belt.lifecycle :as lc]
          '[clojure.tools.logging :as log] :reload)
 
 
@@ -19,6 +20,12 @@
                  :concurrency 2
                  :callback callback}))
 
+
+
+
+
+(lc/register-shutdown-hook :stop-worker #(queue/stop! work-pool))
+(lc/install-shutdown-hooks!)
 
 
 (queue/start! work-pool)

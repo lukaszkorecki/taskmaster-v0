@@ -4,7 +4,31 @@
             [clojure.string :as str]
             [taskmaster.operation :as op]))
 
-(defn with-worker-callback [conn {:keys [queue-name callback]}]
+(defprotocol IWorker
+  (start [_])
+  (stop [_]))
+
+(defrecord Worker [name queue-name thread]
+  IWorker
+  (start [_]
+    (log/infof "worker=%s start" name)
+    (.start ^Thread thread))
+  (stop [_]
+    (log/warnf "worker=%s stop" name)
+    (.stop ^Thread thread)))
+
+(defn create-worker-thread [conn {:keys [name queue-name callback]}]
+  (map->Worker {:thread (Thread.
+                         #(op/listen-and-notify conn {:queue-name queue-name :callback callback})
+                         name)
+                :queue-name queue-name
+                :name name}))
+
+
+(defn with-worker-callback
+  "Wrap the callback function in such a way, that it deletes the jobs
+  once they're processed successfully"
+  [conn {:keys [queue-name callback]}]
   (fn worker-callback [notification]
     (if (empty? notification)
       (log/debug "state=waiting")
@@ -21,19 +45,6 @@
                       (log/debugf "job-id=%s unlock %s" id unlock-res))))
                 jobs))))))
 
-
-(defn create-worker-thread [conn {:keys [name queue-name callback]}]
-  (Thread.
-   #(op/listen-and-notify conn {:queue-name queue-name
-                                :callback callback})
-   name))
-
-(defn- start-worker! [worker-thread]
-  (.start ^Thread worker-thread))
-
-(defn- stop-worker! [worker-thread]
-  (.stop ^Thread worker-thread))
-
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
   [q]
@@ -44,19 +55,19 @@
   {:pre [(pos? concurrency)
          (valid-queue-name? queue-name)]}
   (mapv (fn [i]
-          (let [cb (with-worker-callback conn {:queue-name queue-name
+          (let [name (str "taskmaster-" queue-name "-" i)
+                cb (with-worker-callback conn {:queue-name queue-name
                                                :callback callback})]
         (create-worker-thread conn {:queue-name queue-name
                                     :callback cb
-                                    :name (str "taskmaster-" queue-name "-" i)})))
+                                    :name name})))
         (range 0 concurrency)))
 
 (defn start! [workers]
-  (mapv start-worker! workers))
+  (mapv start workers))
 
 (defn stop! [workers]
-  (mapv stop-worker! workers))
-
+  (mapv stop workers))
 
 (defn put! [conn {:keys [queue-name payload]}]
   (op/put! conn {:queue-name queue-name
