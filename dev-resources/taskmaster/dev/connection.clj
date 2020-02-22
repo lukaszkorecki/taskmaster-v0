@@ -1,4 +1,4 @@
-(ns taskmaster.connection
+(ns taskmaster.dev.connection
   (:require [utility-belt.sql.component.connection-pool :as cp]))
 
 (def config

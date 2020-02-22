@@ -18,7 +18,7 @@
                       (let [del-res (op/delete-job! tx {:id id})]
                         (log/debugf "job-id=%s ack delete=%s" id del-res)))
                     (let [unlock-res (op/unlock! tx {:id id})]
-                      (log/debugf "job-id=%s unlock %s" id unlock-res)))
+                      (log/debugf "job-id=%s unlock %s" id unlock-res))))
                 jobs))))))
 
 
