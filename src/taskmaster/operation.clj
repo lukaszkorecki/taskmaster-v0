@@ -29,7 +29,6 @@
 (defn unlock-dead-workers! [conn]
   (unlock-dead-workers*! conn {:table-name *job-table-name*}))
 
-
 (defn put! [conn {:keys [queue-name payload]}]
   (put*! conn {:table-name *job-table-name* :queue-name queue-name :payload payload}))
 

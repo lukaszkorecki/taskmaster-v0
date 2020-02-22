@@ -24,7 +24,6 @@
                 :queue-name queue-name
                 :name name}))
 
-
 (defn with-worker-callback
   "Wrap the callback function in such a way, that it deletes the jobs
   once they're processed successfully"
@@ -58,9 +57,9 @@
           (let [name (str "taskmaster-" queue-name "-" i)
                 cb (with-worker-callback conn {:queue-name queue-name
                                                :callback callback})]
-        (create-worker-thread conn {:queue-name queue-name
-                                    :callback cb
-                                    :name name})))
+            (create-worker-thread conn {:queue-name queue-name
+                                        :callback cb
+                                        :name name})))
         (range 0 concurrency)))
 
 (defn start! [workers]
