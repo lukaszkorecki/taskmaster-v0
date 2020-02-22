@@ -4,6 +4,27 @@
             [clojure.string :as str]
             [taskmaster.operation :as op]))
 
+(defn with-worker-callback
+  "Wrap the callback function in such a way, that it deletes the jobs
+  once they're processed successfully"
+  [conn {:keys [queue-name callback]}]
+  (fn worker-callback [notification]
+    (if (empty? notification)
+      (log/debug "state=waiting")
+      (sql/with-transaction [tx conn]
+        (let [jobs (op/lock! tx {:queue-name queue-name})]
+          (log/debug "notification=%s" notification)
+          (mapv (fn run-job [{:keys [id] :as job}]
+                  (log/infof "job-id=%s start" id)
+                  (let [res (callback job)]
+                    (log/infof "job-id=%s result=%s" id res)
+                    (when (= ::ack res)
+                      (let [del-res (op/delete-job! tx {:id id})]
+                        (log/debugf "job-id=%s ack delete=%s" id del-res)))
+                    (let [unlock-res (op/unlock! tx {:id id})]
+                      (log/debugf "job-id=%s unlock %s" id unlock-res))))
+                jobs))))))
+
 (defprotocol IWorker
   (start [_])
   (stop [_]))
@@ -18,32 +39,11 @@
     (.stop ^Thread thread)))
 
 (defn create-worker-thread [conn {:keys [name queue-name callback]}]
-  (map->Worker {:thread (Thread.
+  (if-let [thread (Thread.
                          #(op/listen-and-notify conn {:queue-name queue-name :callback callback})
-                         name)
-                :queue-name queue-name
-                :name name}))
-
-(defn with-worker-callback
-  "Wrap the callback function in such a way, that it deletes the jobs
-  once they're processed successfully"
-  [conn {:keys [queue-name callback]}]
-  (fn worker-callback [notification]
-    (if (empty? notification)
-      (log/debug "state=waiting")
-      (sql/with-transaction [tx conn]
-        (let [jobs (op/lock! tx {:queue-name queue-name})]
-          (mapv (fn run-job [{:keys [id] :as job}]
-                  (log/infof "job-id=%s start" id)
-                  (let [res (callback job)]
-                    (log/infof "job-id=%s result=%s" id res)
-                    (when (= ::ack res)
-                      (let [del-res (op/delete-job! tx {:id id})]
-                        (log/debugf "job-id=%s ack delete=%s" id del-res)))
-                    (let [unlock-res (op/unlock! tx {:id id})]
-                      (log/debugf "job-id=%s unlock %s" id unlock-res))))
-                jobs))))))
-
+                         name)]
+    (map->Worker {:thread thread :queue-name queue-name :name name})
+    (throw (ex-info "Failed to create worker thread" {:name name :queue-name queue-name}))))
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
   [q]
@@ -52,6 +52,7 @@
 
 (defn create-worker-pool [conn {:keys [queue-name callback concurrency]}]
   {:pre [(pos? concurrency)
+         (fn? callback)
          (valid-queue-name? queue-name)]}
   (mapv (fn [i]
           (let [name (str "taskmaster-" queue-name "-" i)
@@ -66,6 +67,7 @@
   (mapv start workers))
 
 (defn stop! [workers]
+  (log/info workers)
   (mapv stop workers))
 
 (defn put! [conn {:keys [queue-name payload]}]

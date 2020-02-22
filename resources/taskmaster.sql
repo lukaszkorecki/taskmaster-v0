@@ -45,9 +45,10 @@ update :i:table-name
 
 where locked_by not in (select pid from pg_stat_activity);
 
--- :name put*! :<!
+-- :name put*! :<! :1
 insert into :i:table-name
-  (queue_name, payload) values (:queue-name, :payload) returning id
+  (queue_name, payload) values (:queue-name, :payload)
+returning id
 
 -- :name lock*! :<!
 
@@ -93,7 +94,7 @@ delete from :i:table-name
 
 where queue_name = :queue-name
 
--- :name queue-size* :1
+-- :name queue-size* :? :1
 
 select count(*) from :i:table-name where queue_name = :queue-name
 
