@@ -7,17 +7,18 @@
 (defn with-worker-callback [conn {:keys [queue-name callback]}]
   (fn worker-callback [notification]
     (if (empty? notification)
-      (log/info "state=noop")
+      (log/debug "state=waiting")
       (sql/with-transaction [tx conn]
         (let [jobs (op/lock! tx {:queue-name queue-name})]
           (mapv (fn run-job [{:keys [id] :as job}]
                   (log/infof "job-id=%s start" id)
                   (let [res (callback job)]
-                    (log/infof "job-id=%s res=%s" id res)
+                    (log/infof "job-id=%s result=%s" id res)
                     (when (= ::ack res)
-                      (log/infof "job-id=%s ack delete=%s" id
-                                 (op/delete-job! tx {:id id}))))
-                  (log/infof "job-id=%s unlock %s" id (op/unlock! tx {:id id})))
+                      (let [del-res (op/delete-job! tx {:id id})]
+                        (log/debugf "job-id=%s ack delete=%s" id del-res)))
+                    (let [unlock-res (op/unlock! tx {:id id})]
+                      (log/debugf "job-id=%s unlock %s" id unlock-res)))
                 jobs))))))
 
 
@@ -43,9 +44,11 @@
   {:pre [(pos? concurrency)
          (valid-queue-name? queue-name)]}
   (mapv (fn [i]
+          (let [cb (with-worker-callback conn {:queue-name queue-name
+                                               :callback callback})]
         (create-worker-thread conn {:queue-name queue-name
-                               :callback callback
-                               :name (str "taskmaster-" queue-name "-" i)}))
+                                    :callback cb
+                                    :name (str "taskmaster-" queue-name "-" i)})))
         (range 0 concurrency)))
 
 (defn start! [workers]
