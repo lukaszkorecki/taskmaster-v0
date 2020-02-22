@@ -6,6 +6,7 @@
 
 (declare ping*
          create-jobs-table*!
+         drop-jobs-table*!
          unlock-dead-workers*!
          put*!
          lock*!
@@ -21,6 +22,9 @@
 (defn create-jobs-table! [conn]
   (create-jobs-table*! conn {:table-name *job-table-name*})
   (setup-triggers*! conn {:table-name *job-table-name*}))
+
+(defn drop-jobs-table! [conn]
+  (drop-jobs-table*! conn {:table-name *job-table-name*}))
 
 (defn unlock-dead-workers! [conn]
   (unlock-dead-workers*! conn {:table-name *job-table-name*}))
