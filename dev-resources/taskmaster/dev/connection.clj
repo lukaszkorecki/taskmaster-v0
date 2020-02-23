@@ -7,7 +7,7 @@
    :adapter "postgresql"
    :username "taskmaster"
    :password  "password"
-   :server-name  "127.0.0.1"
+   :server-name  (or (System/getenv "PG_HOST") "127.0.0.1")
    :port-number  "5438"
    :maximum-pool-size 8
    :database-name "taskmaster"})
