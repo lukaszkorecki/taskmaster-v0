@@ -11,6 +11,7 @@
 (def q-fail (atom []))
 
 (defn callback [{:keys [payload] :as job}]
+  (clojure.tools.logging/info job)
   (if (even? (:number payload))
     (do
       (swap! q-ok conj job)
@@ -28,10 +29,10 @@
 (defn start-queue! [queue-name]
   (reset! p
           (queue/start!
-            @pg1
-            {:queue-name queue-name
-             :concurrency 2
-             :callback callback})))
+           @pg1
+           {:queue-name queue-name
+            :concurrency 2
+            :callback callback})))
 
 (defn cleanup! []
   (queue/stop! @p)
@@ -51,18 +52,20 @@
 (deftest it-does-basic-ops
   (start-queue! queue)
   (testing "it pushes to the queue"
-    (queue/put! @pg1 {:queue-name queue :payload {:number 2}})
+    (is (= :x (queue/put! @pg1 {:queue-name queue :payload {:number 2}})))
     (queue/put! @pg1 {:queue-name queue :payload {:number 4}})
     (queue/put! @pg1 {:queue-name queue :payload {:number 6}})
     (queue/put! @pg1 {:queue-name queue :payload {:number 1}}))
   (Thread/sleep 1000)
   (testing "it picks up and processes jobs"
-    (is (= 3 (count (-> q-ok deref))))
-    (is (= [2 4 6] (mapv #(-> % :payload :number) @q-ok)))
-    (is (= 1 (count @q-fail)))
-    (is (= [1] (mapv #(-> % :payload :number) @q-fail)))
-    (is (= {:count 1}
-           (op/queue-size @pg1 {:queue-name queue})))))
+    (testing "success jobs"
+      (is (= 3 (count (-> q-ok deref))))
+      (is (= [2 4 6] (mapv #(-> % :payload :number) @q-ok))))
+    (testing "failed jobs"
+      (is (= 1 (count @q-fail)))
+      (is (= [1] (mapv #(-> % :payload :number) @q-fail)))
+      (is (= {:count 1}
+             (op/queue-size @pg1 {:queue-name queue}))))))
 
 (deftest resuming-lots-of-jobs
   (let [queue  (str queue "_large")]

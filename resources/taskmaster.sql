@@ -24,7 +24,8 @@ drop trigger if exists taskmaster_jobs_notify on :i:table-name;
 -- :name setup-triggers*! :!
 
 create or replace function taskmaster_jobs_notify() returns trigger as $$ begin
-  perform pg_notify(new.queue_name, ''); return null;
+  perform pg_notify(new.queue_name, 'ping');
+  return null;
 end $$ language plpgsql;
 
 drop trigger if exists taskmaster_jobs_notify on :i:table-name;

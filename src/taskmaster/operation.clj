@@ -68,3 +68,21 @@
       (if on-error
         (on-error {:queue-name queue-name :error e})
         (throw e)))))
+
+(defn wrap-callback
+  "Wrap the callback function in such a way, that it deletes the jobs
+  once they're processed successfully"
+  [conn {:keys [queue-name callback]}]
+  (fn worker-callback []
+    (sql/with-transaction [tx conn]
+      (let [jobs (op/lock! tx {:queue-name queue-name})]
+        (mapv (fn run-job [{:keys [id] :as job}]
+                (log/infof "job-id=%s start" id)
+                (let [res (callback job)]
+                  (log/infof "job-id=%s result=%s" id res)
+                  (when (= ::ack res)
+                    (let [del-res (op/delete-job! tx {:id id})]
+                      (log/debugf "job-id=%s ack delete=%s" id del-res)))
+                  (let [unlock-res (op/unlock! tx {:id id})]
+                    (log/debugf "job-id=%s unlock %s" id unlock-res))))
+              jobs)))))

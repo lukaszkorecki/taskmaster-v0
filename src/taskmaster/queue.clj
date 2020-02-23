@@ -3,29 +3,8 @@
             [utility-belt.sql.helpers :as sql]
             [clojure.string :as str]
             [taskmaster.operation :as op])
-  (:import (java.util.concurrent Executors TimeUnit)))
-
-(defn with-worker-callback
-  "Wrap the callback function in such a way, that it deletes the jobs
-  once they're processed successfully"
-  [conn {:keys [queue-name callback]}]
-  (fn worker-callback [notification]
-    (if (empty? notification)
-      (log/debug "state=waiting")
-      (sql/with-transaction [tx conn]
-        (let [jobs (op/lock! tx {:queue-name queue-name})]
-          (log/debug "notification=%s" notification)
-          (mapv (fn run-job [{:keys [id] :as job}]
-                  (log/infof "job-id=%s start" id)
-                  (let [res (callback job)]
-                    (log/infof "job-id=%s result=%s" id res)
-                    (when (= ::ack res)
-                      (let [del-res (op/delete-job! tx {:id id})]
-                        (log/debugf "job-id=%s ack delete=%s" id del-res)))
-                    (let [unlock-res (op/unlock! tx {:id id})]
-                      (log/debugf "job-id=%s unlock %s" id unlock-res))))
-                jobs))))))
-
+  (:import (java.util.concurrent Executors TimeUnit ArrayBlockingQueue)
+           (java.util ArrayList)))
 
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
@@ -37,16 +16,35 @@
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
-  (let [pool (Executors/newFixedThreadPool concurrency)]
-    (log/info "starting queue=%s" queue-name)
-  (mapv (fn [i]
-          (let [name (str "taskmaster-" queue-name "-" i)
-                cb (with-worker-callback conn {:queue-name queue-name
-                                               :callback callback})]
-            (log/info "thread=%s" name)
-            (.submit pool ^Runnable #(op/listen-and-notify conn {:queue-name queue-name :callback cb}))))
-        (range 0 concurrency))
-  pool))
+  (let [pool (Executors/newFixedThreadPool concurrency)
+        queue (ArrayBlockingQueue. 10) ; max in-flight messages
+        conveyor (fn conveyor [notification]
+                   (log/infof "conv=%s" (vec notification))
+                   (mapv #(.offer queue %) notification))
+        listener (fn listener [processor]
+                   (log/info "listener hi")
+                   (let [a (ArrayList.)]
+                     (while true
+                       (.drainTo queue a) ;; will block if queue is empty
+                       (mapv (fn [i]
+                               (log/infof "in-listener %s" i)
+                               (processor)) (seq a))
+                       (.clear a))))]
+
+    (log/infof "starting consumer=%s" queue-name)
+    ;; main listener, will notify other threads in the pool when something happens
+    ;; then they will wake up and use locking semantics to pull jobs from the queue table
+    ;; and do whatever they must. Therefore at minimum the pool will have 2 threads
+    (.submit pool (Thread. #(op/listen-and-notify conn {:queue-name queue-name :callback conveyor})
+                           (str queue-name "_listener")))
+    (mapv (fn [i]
+            (let [name (str "taskmaster-" queue-name "-" i)
+                  processor (listener (op/wrap-callback conn {:queue-name queue-name
+                                                              :callback callback}))]
+              (log/infof "starting thread=%s" name)
+              (.submit pool (Thread. processor name))))
+          (range 0 concurrency))
+    pool))
 
 (defn stop! [pool]
   (log/infof "pool=%s stopping" pool)
@@ -54,5 +52,6 @@
   (.shutdownNow pool))
 
 (defn put! [conn {:keys [queue-name payload]}]
+  {:pre [(valid-queue-name? queue-name)]}
   (op/put! conn {:queue-name queue-name
                  :payload payload}))
