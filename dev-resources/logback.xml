@@ -1,4 +1,4 @@
-<configuration>
+<configuration scan="true" scanPeriod="30 seconds">
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <encoder>
       <pattern>date=%date level=%level thread=%thread ns=%logger message=%msg%n</pattern>
@@ -7,7 +7,7 @@
 
   <logger name="com.zaxxer.hikari" level="error" />
 
-  <root level="debug">
+  <root level="info">
     <appender-ref ref="STDOUT" />
   </root>
 </configuration>
