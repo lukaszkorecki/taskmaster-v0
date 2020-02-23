@@ -15,10 +15,10 @@
   (if (even? (:number payload))
     (do
       (swap! q-ok conj job)
-      ::queue/ack)
+      ::op/ack)
     (do
       (swap! q-fail conj job)
-      ::queue/reject)))
+      ::op/reject)))
 
 (def queue "test_tm")
 
