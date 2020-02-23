@@ -82,7 +82,7 @@ set locked_at = null, run_count = run_count + 1
 
 where id = :id
 
--- :name delete-job*! :!
+-- :name delete-job*! :! :1
 
 delete from :i:table-name
 
@@ -98,6 +98,6 @@ where queue_name = :queue-name
 
 select count(*) from :i:table-name where queue_name = :queue-name
 
--- :name listen* :<!
+-- :name listen* :?
 
 listen :i:queue-name

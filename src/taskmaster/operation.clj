@@ -61,6 +61,8 @@
              (map #(.getParameter %))
              callback)
         (Thread/sleep (or interval-ms 500))))
+    (catch InterruptedException _
+      ::interrupt) ; noop
     (catch Exception e
       (log/error "Listen notify error: \n" e)
       (if on-error

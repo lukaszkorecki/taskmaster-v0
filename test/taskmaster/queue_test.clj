@@ -10,7 +10,7 @@
 (def q-ok (atom []))
 (def q-fail (atom []))
 
-(defn callback [{:keys [id queue-name payload] :as job}]
+(defn callback [{:keys [payload] :as job}]
   (if (even? (:number payload))
     (do
       (swap! q-ok conj job)
@@ -25,12 +25,11 @@
   (reset! pg1 (.start (conn/make-one)))
   (op/create-jobs-table! @pg1))
 
-(defn start-queue! []
+(defn start-queue! [queue-name]
   (reset! p
           (queue/start!
-
             @pg1
-            {:queue-name queue
+            {:queue-name queue-name
              :concurrency 2
              :callback callback})))
 
@@ -44,12 +43,13 @@
 (use-fixtures :each (fn [t]
                       (try
                         (start-conn!)
-                        (start-queue!)
+
                         (t)
                         (finally
                           (cleanup!)))))
 
 (deftest it-does-basic-ops
+  (start-queue! queue)
   (testing "it pushes to the queue"
     (queue/put! @pg1 {:queue-name queue :payload {:number 2}})
     (queue/put! @pg1 {:queue-name queue :payload {:number 4}})
@@ -65,17 +65,17 @@
            (op/queue-size @pg1 {:queue-name queue})))))
 
 (deftest resuming-lots-of-jobs
-  (queue/stop! @p)
-  (mapv #(queue/put! @pg1 {:queue-name (str queue "-l") :payload {:number 2 :batch %}})
-        (range 0 100))
-  (queue/start! @p)
-  (is (= :x (queue/put! @pg1 {:queue-name (str queue "-l") :payload {:number 2}})))
-  (loop [i 0]
-    (when (and
-            (not= (count @q-ok) 101)
-            (< i 130))
-      (Thread/sleep 100)
-      (recur (inc i))))
-
-  (is (= {:count 0} (op/queue-size @pg1 {:queue-name (str queue "-l")})))
-  (is (= 101 (count @q-ok))))
+  (let [queue  (str queue "_large")]
+    (mapv #(queue/put! @pg1 {:queue-name queue :payload {:number 2 :batch %}})
+          (range 0 100))
+    (start-queue! queue)
+    ;; FIXME: this shouldn't be needed!
+    (is (= {:id 101} (queue/put! @pg1 {:queue-name queue :payload {:number 2}})))
+    (loop [i 0] ; wait for all the jobs to run
+      (when (and
+             (not= (count @q-ok) 101)
+             (< i 130))
+        (Thread/sleep 100)
+        (recur (inc i))))
+    (is (= {:count 0} (op/queue-size @pg1 {:queue-name queue})))
+    (is (= 101 (count @q-ok)))))
