@@ -82,6 +82,7 @@
                 (log/infof "job-id=%s start" id)
                 (let [res (callback job)]
                   (log/infof "job-id=%s result=%s" id res)
+                  ;; FIXME - raise if keyword is not qualified to taskmaster.operation?
                   (when (= ::ack res)
                     (let [del-res (delete-job! tx {:id id})]
                       (log/infof "job-id=%s ack delete=%s" id del-res)))

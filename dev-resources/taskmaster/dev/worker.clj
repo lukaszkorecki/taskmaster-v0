@@ -13,8 +13,8 @@
   (swap! qs conj id)
   (log/info (count (set @qs)))
   (let [res   (if (and (:some-number payload) (even? (:some-number payload)))
-                :taskmaster.queue/ack
-                :taskmaster.queue/reject)]
+                :taskmaster.operation/ack
+                :taskmaster.operation/reject)]
     (log/info res)
     res))
 

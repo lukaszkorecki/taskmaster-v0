@@ -18,17 +18,30 @@ where locked_at is null;
 -- :name drop-jobs-table*! :!
 
 drop table if exists :i:table-name;
-drop function  taskmaster_jobs_notify();
-drop trigger if exists taskmaster_jobs_notify on :i:table-name;
+drop function
+--~ (str (:table-name params) "_notify()")
+;
+
+drop trigger if exists
+--~ (str (:table-name params) "_notify")
+on :i:table-name;
 
 -- :name setup-triggers*! :!
 
-create or replace function taskmaster_jobs_notify() returns trigger as $$ begin
+create or replace function
+
+--~ (str (:table-name params) "_notify()")
+
+returns trigger as $$ begin
   perform pg_notify(new.queue_name, 'ping');
   return null;
 end $$ language plpgsql;
 
-drop trigger if exists taskmaster_jobs_notify on :i:table-name;
+drop trigger if exists
+
+--~ (str (:table-name params) "_notify")
+
+on :i:table-name;
 
 create trigger taskmaster_jobs_notify
   after insert on :i:table-name for each row
