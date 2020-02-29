@@ -1,6 +1,7 @@
 (ns taskmaster.operation
   (:require [utility-belt.sql.conv] ;; load coercions
             [utility-belt.sql.model :as model]
+            [utility-belt.sql.helpers :as sql]
             [clojure.tools.logging :as log])
   (:import (org.postgresql PGConnection PGNotification)))
 
@@ -75,14 +76,14 @@
   [conn {:keys [queue-name callback]}]
   (fn worker-callback []
     (sql/with-transaction [tx conn]
-      (let [jobs (op/lock! tx {:queue-name queue-name})]
+      (let [jobs (lock! tx {:queue-name queue-name})]
         (mapv (fn run-job [{:keys [id] :as job}]
                 (log/infof "job-id=%s start" id)
                 (let [res (callback job)]
                   (log/infof "job-id=%s result=%s" id res)
                   (when (= ::ack res)
-                    (let [del-res (op/delete-job! tx {:id id})]
-                      (log/debugf "job-id=%s ack delete=%s" id del-res)))
-                  (let [unlock-res (op/unlock! tx {:id id})]
-                    (log/debugf "job-id=%s unlock %s" id unlock-res))))
+                    (let [del-res (delete-job! tx {:id id})]
+                      (log/infof "job-id=%s ack delete=%s" id del-res)))
+                  (let [unlock-res (unlock! tx {:id id})]
+                    (log/infof "job-id=%s unlock %s" id unlock-res))))
               jobs)))))
