@@ -34,16 +34,7 @@
   (let [_ (log/infof "unlocking=%s queue-name=%s" (op/unlock-dead-workers! conn) queue-name)
         ;; pool (Executors/newFixedThreadPool concurrency)
         queue (ConcurrentLinkedQueue.)
-        conveyor (fn conveyor [notification]
-                   (mapv #(.offer queue %) notification))
-        listener (fn listener [processor]
-                   (log/infof "listener=start queue=%s" queue-name)
-                   (while true
-                     (when-let [el (.poll queue)]
-                       (log/info "got something" el)
-                       (processor))
-                     (Thread/sleep 10)
-                     ))
+        conveyor (fn conveyor [notification] (mapv #(.offer queue %) notification))
         _ (log/infof "pool=starting queue-name=%s concurrency=%s" queue-name concurrency)
         ;; main listener, will notify other threads in the pool when something happens
         ;; then they will wake up and use locking semantics to pull jobs from the queue table
@@ -54,9 +45,17 @@
     pool (future (mapv (fn [i]
             (let [name (str "taskmaster-" queue-name "-" i)
                   _ (log/info name)
-                  processor (listener (op/wrap-callback conn {:queue-name queue-name :callback callback}))
-                  thr (Thread. processor name)]
-              (log/infof "starging %s %s %s" name (.start thr) thr)
+                  wrapped-callback (op/wrap-callback conn {:queue-name queue-name :callback callback})
+                  thr (Thread. (fn processor []
+                                 (log/info "procesor=start name=%s" (.getName (Thread/currentThread)))
+                                 (while true
+                                   (when-let [el (.poll queue)]
+                                     (log/info "got something" el)
+                                     (wrapped-callback))
+                                   (Thread/sleep 25)))
+                                 name)]
+              (log/infof "starging %s %s" name thr)
+               (.start thr)
               thr))
 
                (vec (range 0 concurrency))))
