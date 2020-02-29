@@ -77,6 +77,7 @@
   (fn worker-callback []
     (sql/with-transaction [tx conn]
       (let [jobs (lock! tx {:queue-name queue-name})]
+        (log/infof "jobs-count=%s" (count jobs))
         (mapv (fn run-job [{:keys [id] :as job}]
                 (log/infof "job-id=%s start" id)
                 (let [res (callback job)]
