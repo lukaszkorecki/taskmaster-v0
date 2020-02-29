@@ -19,10 +19,10 @@
   (if (even? (:number payload))
     (do
       (swap! q-ok conj job)
-      ::op/ack)
+      :taskmaster.operation/ack)
     (do
       (swap! q-fail conj job)
-      ::op/reject)))
+      :taskmaster.operation/reject)))
 
 (def queue "test_tm")
 
