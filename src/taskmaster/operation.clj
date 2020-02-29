@@ -3,7 +3,10 @@
             [utility-belt.sql.model :as model]
             [utility-belt.sql.helpers :as sql]
             [clojure.tools.logging :as log])
-  (:import (org.postgresql PGConnection PGNotification)))
+  (:import (org.postgresql PGConnection PGNotification)
+           (org.postgresql.core Notification)
+           (com.zaxxer.hikari HikariDataSource)
+           (com.zaxxer.hikari.pool HikariProxyConnection)))
 
 (declare ping*
          create-jobs-table*!
@@ -50,17 +53,16 @@
 (defn queue-size [conn {:keys [queue-name]}]
   (queue-size* conn {:table-name *job-table-name* :queue-name queue-name}))
 
-(defn listen-and-notify [conn {:keys [queue-name callback on-error interval-ms] :as opts}]
+(defn listen-and-notify [{:keys [datasource] :as conn}
+                         {:keys [queue-name callback on-error interval-ms] :as opts}]
   (try
-    (let [raw-conn (-> conn :datasource .getConnection)
-          pg-conn (.unwrap raw-conn PGConnection)]
+    (let [raw-conn (.getConnection ^HikariDataSource datasource)
+          pg-conn (.unwrap ^HikariProxyConnection  raw-conn PGConnection)]
       (ping* pg-conn)
       (listen* pg-conn {:queue-name queue-name})
       (while true
-        (->> pg-conn
-             .getNotifications
-             (map #(.getParameter %))
-             callback)
+        (callback (map #(.getParameter ^Notification %)
+                       (.getNotifications ^PGConnection pg-conn)))
         (Thread/sleep (or interval-ms 500))))
     (catch InterruptedException _
       ::interrupt) ; noop

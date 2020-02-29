@@ -45,7 +45,7 @@
   (reset! q-ok [])
   (reset! q-fail [])
   (reset! all-jobs [])
-(log/warn  (op/drop-jobs-table! @pg1))
+  (log/warn  (op/drop-jobs-table! @pg1))
   (.stop @pg1)
   (.stop @pg2))
 
@@ -58,14 +58,13 @@
                           (catch Exception e
 
                             (cleanup!)
-                            (throw e)
-                            )))))
+                            (throw e))))))
 
 (deftest it-does-basic-ops
 
   (testing "it pushes to the queue"
     (is (= :x (queue/put! @pg1 {:queue-name queue :payload {:number 2}})))
-  (start-queue! queue)
+    (start-queue! queue)
     (queue/put! @pg1 {:queue-name queue :payload {:number 4}})
     (queue/put! @pg1 {:queue-name queue :payload {:number 6}})
     (queue/put! @pg1 {:queue-name queue :payload {:number 1}}))
@@ -78,12 +77,9 @@
       (is (= 1 (count @q-fail)))
       (is (= [1] (mapv #(-> % :payload :number) @q-fail)))
       (is (= {:count 1}
-             (op/queue-size @pg1 {:queue-name queue})
+             (op/queue-size @pg1 {:queue-name queue})))
 
-             ))
-
-      (is (= :x @all-jobs))
-      )))
+      (is (= :x @all-jobs)))))
 
 (deftest resuming-lots-of-jobs
   (let [queue  (str queue "_large")]

@@ -2,10 +2,7 @@
   (:require [clojure.tools.logging :as log]
             [clojure.string :as str]
             [taskmaster.operation :as op])
-  (:import (java.util.concurrent Executors TimeUnit ArrayBlockingQueue ConcurrentLinkedQueue)
-           (java.util ArrayList)))
-
-
+  (:import (java.util.concurrent  ConcurrentLinkedQueue)))
 
 (defprotocol Closable
   (close [this]))
@@ -14,9 +11,8 @@
   Closable
   (close [this]
     (log/infof "listener=stop queue-name=%s" queue-name)
-    (mapv #(.stop %) pool)
+    (mapv #(.stop ^Thread %) pool)
     (future-cancel listener)))
-
 
 (defn stop! [worker]
   (close worker))
@@ -41,26 +37,25 @@
         ;; and do whatever they must. Therefore at minimum the pool will have 2 threads per queue:
         ;; 1 listener
         ;; 1 (at least) consumer, receiving messages from the blocking queue
+        ;; The pool is a simple collection of threads polling the shared Concurrentlinkedqueue
         listener-thread (future-call #(op/listen-and-notify conn {:queue-name queue-name :callback conveyor}))
-    pool (future (mapv (fn [i]
-            (let [name (str "taskmaster-" queue-name "-" i)
-                  _ (log/info name)
-                  wrapped-callback (op/wrap-callback conn {:queue-name queue-name :callback callback})
-                  thr (Thread. (fn processor []
-                                 (log/info "procesor=start name=%s" (.getName (Thread/currentThread)))
-                                 (while true
-                                   (when-let [el (.poll queue)]
-                                     (log/info "got something" el)
-                                     (wrapped-callback))
-                                   (Thread/sleep 25)))
-                                 name)]
-              (log/infof "starging %s %s" name thr)
-               (.start thr)
-              thr))
+        pool (future (mapv (fn [i]
+                             (let [name (str "taskmaster-" queue-name "-" i)
+                                   _ (log/info name)
+                                   wrapped-callback (op/wrap-callback conn {:queue-name queue-name :callback callback})
+                                   thr (Thread. (fn processor []
+                                                  (log/info "procesor=start name=%s" (.getName (Thread/currentThread)))
+                                                  (while true
+                                                    (when-let [el (.poll queue)]
+                                                      (log/info "got something" el)
+                                                      (wrapped-callback))
+                                                    (Thread/sleep 25)))
+                                                name)]
+                               (log/infof "starging %s %s" name thr)
+                               (.start thr)
+                               thr))
 
-               (vec (range 0 concurrency))))
-
-]
+                           (vec (range 0 concurrency))))]
     (->Worker queue-name listener-thread @pool)))
 
 (defn put! [conn {:keys [queue-name payload]}]
