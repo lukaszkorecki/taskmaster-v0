@@ -1,8 +1,11 @@
 (ns taskmaster.queue
-  (:require [clojure.tools.logging :as log]
-            [clojure.string :as str]
-            [taskmaster.operation :as op])
-  (:import (java.util.concurrent  ConcurrentLinkedQueue)))
+  (:require
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
+   [taskmaster.operation :as op])
+  (:import
+   (java.util.concurrent
+    ConcurrentLinkedQueue)))
 
 (defprotocol Closable
   (close [this]))

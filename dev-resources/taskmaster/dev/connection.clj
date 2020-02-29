@@ -1,5 +1,7 @@
 (ns taskmaster.dev.connection
-  (:require [utility-belt.sql.component.connection-pool :as cp]))
+  (:require
+    [utility-belt.sql.component.connection-pool :as cp]))
+
 
 (def config
   {:auto-commit true
@@ -11,6 +13,7 @@
    :port-number  "5438"
    :maximum-pool-size 8
    :database-name "taskmaster"})
+
 
 (defn make-one []
   (cp/create config))

@@ -1,12 +1,20 @@
 (ns taskmaster.operation
-  (:require [utility-belt.sql.conv] ;; load coercions
-            [utility-belt.sql.model :as model]
-            [utility-belt.sql.helpers :as sql]
-            [clojure.tools.logging :as log])
-  (:import (org.postgresql PGConnection PGNotification)
-           (org.postgresql.core Notification)
-           (com.zaxxer.hikari HikariDataSource)
-           (com.zaxxer.hikari.pool HikariProxyConnection)))
+  (:require
+   [clojure.tools.logging :as log]
+   [utility-belt.sql.conv]
+   [utility-belt.sql.helpers :as sql]
+    ;; load coercions
+   [utility-belt.sql.model :as model])
+  (:import
+   (com.zaxxer.hikari
+    HikariDataSource)
+   (com.zaxxer.hikari.pool
+    HikariProxyConnection)
+   (org.postgresql
+    PGConnection
+    PGNotification)
+   (org.postgresql.core
+    Notification)))
 
 (declare ping*
          create-jobs-table*!

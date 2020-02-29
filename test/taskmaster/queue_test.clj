@@ -1,11 +1,10 @@
 (ns taskmaster.queue-test
   (:require
-    [clojure.test :refer :all]
-    [clojure.tools.logging :as log]
-    [taskmaster.dev.connection :as conn]
-    [taskmaster.operation :as op]
-    [taskmaster.queue :as queue]))
-
+   [clojure.test :refer :all]
+   [clojure.tools.logging :as log]
+   [taskmaster.dev.connection :as conn]
+   [taskmaster.operation :as op]
+   [taskmaster.queue :as queue]))
 
 (def pg1 (atom nil))
 (def pg2 (atom nil))
@@ -15,7 +14,6 @@
 (def q-fail (atom []))
 
 (def all-jobs (atom []))
-
 
 (defn callback
   [{:keys [id queue-name payload] :as job}]
@@ -29,9 +27,7 @@
       (swap! q-fail conj job)
       :taskmaster.operation/reject)))
 
-
 (def queue-name "test_jobs")
-
 
 (defn start-conn!
   []
@@ -39,17 +35,15 @@
   (reset! pg2 (.start (conn/make-one)))
   (op/create-jobs-table! @pg1))
 
-
 (defn start-consumer!
   [queue-name]
   (reset! p
           (future
             (queue/start!
-              @pg2
-              {:queue-name queue-name
-               :concurrency 1
-               :callback callback}))))
-
+             @pg2
+             {:queue-name queue-name
+              :concurrency 1
+              :callback callback}))))
 
 (defn cleanup!
   []
@@ -62,7 +56,6 @@
   (.stop @pg1)
   (.stop @pg2))
 
-
 (use-fixtures :each (fn [t]
                       (with-bindings {#'taskmaster.operation/*job-table-name* "test_jobs_5"}
                         (try
@@ -73,7 +66,6 @@
 
                             (cleanup!)
                             (throw e))))))
-
 
 (deftest it-does-basic-ops
 
@@ -103,19 +95,18 @@
               {:number 1}]
              @all-jobs)))))
 
-
 #_(deftest resuming-lots-of-jobs
-  (let [queue  (str queue "_large")]
-    (mapv #(queue/put! @pg1 {:queue-name queue :payload {:number 2 :batch %}})
-          (range 0 100))
-    (start-consumer! queue)
+    (let [queue  (str queue "_large")]
+      (mapv #(queue/put! @pg1 {:queue-name queue :payload {:number 2 :batch %}})
+            (range 0 100))
+      (start-consumer! queue)
     ;; FIXME: this shouldn't be needed!
-    (is (= {:id 101} (queue/put! @pg1 {:queue-name queue :payload {:number 2}})))
-    (loop [i 0] ; wait for all the jobs to run
-      (when (and
-             (not= (count @q-ok) 101)
-             (< i 130))
-        (Thread/sleep 10)
-        (recur (inc i))))
-    (is (= {:count 0} (op/queue-size @pg1 {:queue-name queue})))
-    (is (= 101 (count @q-ok)))))
+      (is (= {:id 101} (queue/put! @pg1 {:queue-name queue :payload {:number 2}})))
+      (loop [i 0] ; wait for all the jobs to run
+        (when (and
+               (not= (count @q-ok) 101)
+               (< i 130))
+          (Thread/sleep 10)
+          (recur (inc i))))
+      (is (= {:count 0} (op/queue-size @pg1 {:queue-name queue})))
+      (is (= 101 (count @q-ok)))))
