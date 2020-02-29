@@ -52,7 +52,7 @@ create trigger taskmaster_jobs_notify
 
 select 1
 
--- :name unlock-dead-workers*! :!
+-- :name unlock-dead-consumers*! :!
 
 update :i:table-name
   set locked_at = null, locked_by = null

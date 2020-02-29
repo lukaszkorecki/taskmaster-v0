@@ -7,15 +7,15 @@
 (defprotocol Closable
   (close [this]))
 
-(defrecord Worker [queue-name listener pool]
+(defrecord Consumer [queue-name listener pool]
   Closable
   (close [this]
     (log/infof "listener=stop queue-name=%s" queue-name)
     (mapv #(.stop ^Thread %) pool)
     (future-cancel listener)))
 
-(defn stop! [worker]
-  (close worker))
+(defn stop! [consumer]
+  (close consumer))
 
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
@@ -27,10 +27,10 @@
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
-  (let [_ (log/infof "unlocking=%s queue-name=%s" (op/unlock-dead-workers! conn) queue-name)
+  (let [_ (log/infof "unlocking=%s queue-name=%s" (op/unlock-dead-consumers! conn) queue-name)
         ;; pool (Executors/newFixedThreadPool concurrency)
         queue (ConcurrentLinkedQueue.)
-        conveyor (fn conveyor [notification] (mapv #(.offer queue %) notification))
+        conveyor (fn conveyor [notification] (mapv #(.offer ^Concurrentlinkedqueue queue %) notification))
         _ (log/infof "pool=starting queue-name=%s concurrency=%s" queue-name concurrency)
         ;; main listener, will notify other threads in the pool when something happens
         ;; then they will wake up and use locking semantics to pull jobs from the queue table
@@ -44,19 +44,16 @@
                                    _ (log/info name)
                                    wrapped-callback (op/wrap-callback conn {:queue-name queue-name :callback callback})
                                    thr (Thread. (fn processor []
-                                                  (log/info "procesor=start name=%s" (.getName (Thread/currentThread)))
+                                                  (log/info "procesor=start name=%s" name)
                                                   (while true
-                                                    (when-let [el (.poll queue)]
-                                                      (log/info "got something" el)
+                                                    (when-let [el (.poll ^Concurrentlinkedqueue queue)]
                                                       (wrapped-callback))
                                                     (Thread/sleep 25)))
                                                 name)]
-                               (log/infof "starging %s %s" name thr)
-                               (.start thr)
+                               (.start ^Thread thr)
                                thr))
-
                            (vec (range 0 concurrency))))]
-    (->Worker queue-name listener-thread @pool)))
+    (->Consumer queue-name listener-thread @pool)))
 
 (defn put! [conn {:keys [queue-name payload]}]
   {:pre [(valid-queue-name? queue-name)]}

@@ -11,7 +11,7 @@
 (declare ping*
          create-jobs-table*!
          drop-jobs-table*!
-         unlock-dead-workers*!
+         unlock-dead-consumers*!
          put*!
          lock*!
          unlock*!
@@ -30,8 +30,8 @@
 (defn drop-jobs-table! [conn]
   (drop-jobs-table*! conn {:table-name *job-table-name*}))
 
-(defn unlock-dead-workers! [conn]
-  (unlock-dead-workers*! conn {:table-name *job-table-name*}))
+(defn unlock-dead-consumers! [conn]
+  (unlock-dead-consumers*! conn {:table-name *job-table-name*}))
 
 (defn put! [conn {:keys [queue-name payload]}]
   (put*! conn {:table-name *job-table-name* :queue-name queue-name :payload payload}))
@@ -76,7 +76,7 @@
   "Wrap the callback function in such a way, that it deletes the jobs
   once they're processed successfully"
   [conn {:keys [queue-name callback]}]
-  (fn worker-callback []
+  (fn consumer-callback []
     (sql/with-transaction [tx conn]
       (let [jobs (lock! tx {:queue-name queue-name})]
         (log/infof "jobs-count=%s" (count jobs))
