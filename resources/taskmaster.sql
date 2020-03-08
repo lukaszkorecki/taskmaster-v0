@@ -9,7 +9,9 @@ create table if not exists :i:table-name  (
   created_at timestamptz default now()
 );
 
-create index if not exists idx_taskmaster_unlocked_jobs
+create index if not exists
+
+--~ (str "idx_" (:table-name params) "_unlocked_jobs")
 
 on :i:table-name (queue_name, id, run_count)
 
@@ -33,7 +35,7 @@ create or replace function
 --~ (str (:table-name params) "_notify()")
 
 returns trigger as $$ begin
-  perform pg_notify(new.queue_name, 'ping');
+  perform pg_notify(new.queue_name, '');
   return null;
 end $$ language plpgsql;
 
@@ -43,9 +45,13 @@ drop trigger if exists
 
 on :i:table-name;
 
-create trigger taskmaster_jobs_notify
+create trigger
+--~ (str (:table-name params) "_notify")
   after insert on :i:table-name for each row
-  execute procedure taskmaster_jobs_notify();
+  execute procedure
+
+--~ (str (:table-name params) "_notify()")
+;
 
 
 -- :name ping* :? :1
