@@ -7,7 +7,6 @@
     (java.util.concurrent
       ConcurrentLinkedQueue)))
 
-
 (defprotocol Closable
   (close [this]))
 
@@ -18,17 +17,14 @@
     (mapv #(.stop ^Thread %) pool)
     (future-cancel listener)))
 
-
 (defn stop! [consumer]
   (close consumer))
-
 
 (defn- valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
   [q]
   (and (not (str/blank? q))
        (not (re-find #"\." q))))
-
 
 (defn start! [conn {:keys [queue-name callback concurrency]}]
   {:pre [(pos? concurrency)
@@ -69,7 +65,8 @@
 
 
 (defn put! [conn {:keys [queue-name payload]}]
-  {:pre [(valid-queue-name? queue-name)]}
-  (log/infof "put queue=%s job=%s" queue-name payload)
+  {:pre [(valid-queue-name? queue-name)
+         (map? payload)]}
+  (log/debugf "put queue=%s job=%s" queue-name payload)
   (op/put! conn {:queue-name queue-name
                  :payload payload}))
