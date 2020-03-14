@@ -65,6 +65,12 @@ update :i:table-name
 
 where locked_by not in (select pid from pg_stat_activity);
 
+-- :name find-pending-jobs* :?
+
+select * from :i:table-name
+
+where run_count = 0 and locked_by = null and queue_name = :queue-name
+
 -- :name put*! :<! :1
 insert into :i:table-name
   (queue_name, payload) values (:queue-name, :payload)

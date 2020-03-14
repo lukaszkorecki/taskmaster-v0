@@ -33,7 +33,7 @@
     ::op/reject))
 
 
-(defn make-system []
+(defn make-system [queue-name]
   (component/map->SystemMap
    {:db-conn (conn/make-one)
     :consumer (component/using
@@ -67,11 +67,11 @@
 (use-fixtures :each (fn [test-fn]
                       (with-redefs  [taskmaster.operation/*job-table-name*  "taskmaster_test"]
                         ;; this has to happen outside of the system as we need the table to exist!
-                        (setup!)
-                        (reset! SYS (component/start-system (make-system)))
+                        (when (setup!)
+                          (reset! SYS (component/start-system (make-system queue-name))))
                         (test-fn)
-                        (cleanup!)
-                        (swap! SYS component/stop))))
+                        (when (cleanup!)
+                          (swap! SYS component/stop)))))
 
 
 (deftest basic-pub-consume
@@ -99,3 +99,20 @@
               {:id 3 :payload {:number 6} :queue-name queue-name}
               {:id 4 :payload {:number 1} :queue-name queue-name}]
              (map #(select-keys % [:id :queue-name :payload]) @all-jobs))))))
+
+
+(deftest resume-consumption
+  ;; start another system, with alternative consumer
+  ;; but push jobs before that happens
+  (mapv (fn [i]
+          (ts/put! (:publisher @SYS) {:queue-name "resumable_queue" :payload {:number (* i 2)}}))
+        (range 1 10))
+  (let [other-syst (component/start-system (make-system "resumable_queue"))]
+    (Thread/sleep 5000)
+    (is (= 9  (count @all-jobs)))
+    (is (= [2 4 6 8 10 14 16 18] (mapv #(-> % :payload :number) @acked-jobs)))
+    (try
+      (Thread/sleep 2000)
+      (component/stop other-syst)
+      (catch Exception _
+        :noop))))

@@ -46,6 +46,9 @@
 (defn unlock-dead-consumers! [conn]
   (unlock-dead-consumers*! conn {:table-name *job-table-name*}))
 
+(defn find-pending-jobs [conn {:keys [queue-name]}]
+  (find-pending-jobs* conn {:table-name *job-table-name* :queue-name queue-name}))
+
 
 (defn put! [conn {:keys [queue-name payload]}]
   (put*! conn {:table-name *job-table-name* :queue-name queue-name :payload payload}))

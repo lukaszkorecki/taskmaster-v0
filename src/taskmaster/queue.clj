@@ -4,9 +4,11 @@
    [clojure.tools.logging :as log]
    [taskmaster.operation :as op])
   (:import
-   (java.io Closeable)
+   (java.io
+    Closeable)
    (java.util.concurrent
     ConcurrentLinkedQueue)))
+
 
 (defrecord Consumer [queue-name listener pool]
   Closeable
@@ -31,7 +33,8 @@
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
-  (let [_ (log/infof "unlocking=%s queue-name=%s" (op/unlock-dead-consumers! conn) queue-name)
+  (let [_ (log/infof "unlocking queue-name=%s"  queue-name)
+        _ (op/unlock-dead-consumers! conn)
         ;; pool (Executors/newFixedThreadPool concurrency)
         queue (ConcurrentLinkedQueue.)
         conveyor (fn conveyor [notification] (mapv #(.offer ^ConcurrentLinkedQueue queue %) notification))
@@ -63,7 +66,10 @@
                                (.start ^Thread thr)
                                thr))
                            (vec (range 0 concurrency))))]
+    ;; catchup on pending jobs
+    ((op/wrap-callback conn {:queue-name queue-name :callback callback}))
     (->Consumer queue-name listener-thread @pool)))
+
 
 (defn put! [conn {:keys [queue-name payload]}]
   {:pre [(valid-queue-name? queue-name)
