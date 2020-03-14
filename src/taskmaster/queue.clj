@@ -1,30 +1,25 @@
 (ns taskmaster.queue
-  (:require [clojure.tools.logging :as log]
-            [utility-belt.sql.helpers :as sql]
-            [clojure.string :as str]
-            [taskmaster.operation :as op])
-  (:import (java.util.concurrent Executors TimeUnit)))
+  (:require
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
+   [taskmaster.operation :as op])
+  (:import
+   (java.io
+    Closeable)
+   (java.util.concurrent
+    ConcurrentLinkedQueue)))
 
-(defn with-worker-callback
-  "Wrap the callback function in such a way, that it deletes the jobs
-  once they're processed successfully"
-  [conn {:keys [queue-name callback]}]
-  (fn worker-callback [notification]
-    (if (empty? notification)
-      (log/debug "state=waiting")
-      (sql/with-transaction [tx conn]
-        (let [jobs (op/lock! tx {:queue-name queue-name})]
-          (log/debug "notification=%s" notification)
-          (mapv (fn run-job [{:keys [id] :as job}]
-                  (log/infof "job-id=%s start" id)
-                  (let [res (callback job)]
-                    (log/infof "job-id=%s result=%s" id res)
-                    (when (= ::ack res)
-                      (let [del-res (op/delete-job! tx {:id id})]
-                        (log/debugf "job-id=%s ack delete=%s" id del-res)))
-                    (let [unlock-res (op/unlock! tx {:id id})]
-                      (log/debugf "job-id=%s unlock %s" id unlock-res))))
-                jobs))))))
+
+(defrecord Consumer [queue-name listener pool]
+  Closeable
+  (close [this]
+    (log/warnf "listener=stop queue-name=%s" queue-name)
+    (mapv #(.stop ^Thread %) pool)
+    (future-cancel listener)))
+
+
+(defn stop! [consumer]
+  (.close ^Closeable consumer))
 
 
 (defn- valid-queue-name?
@@ -33,26 +28,51 @@
   (and (not (str/blank? q))
        (not (re-find #"\." q))))
 
+
 (defn start! [conn {:keys [queue-name callback concurrency]}]
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
-  (let [pool (Executors/newFixedThreadPool concurrency)]
-    (log/info "starting queue=%s" queue-name)
-  (mapv (fn [i]
-          (let [name (str "taskmaster-" queue-name "-" i)
-                cb (with-worker-callback conn {:queue-name queue-name
-                                               :callback callback})]
-            (log/info "thread=%s" name)
-            (.submit pool ^Runnable #(op/listen-and-notify conn {:queue-name queue-name :callback cb}))))
-        (range 0 concurrency))
-  pool))
+  (let [_ (log/warnf "unlocking queue-name=%s"  queue-name)
+        _ (op/unlock-dead-consumers! conn)
+        queue (ConcurrentLinkedQueue.)
+        conveyor (fn conveyor [notification] (mapv #(.offer ^ConcurrentLinkedQueue queue %) notification))
+        _ (log/infof "pool=starting queue-name=%s concurrency=%s" queue-name concurrency)
+        ;; main listener, will notify other threads in the pool when something happens
+        ;; then they will wake up and use locking semantics to pull jobs from the queue table
+        ;; and do whatever they must. Therefore at minimum the pool will have 2 threads per queue:
+        ;; 1 listener
+        ;; 1 (at least) consumer, receiving messages from the blocking queue
+        ;; The pool is a simple collection of threads polling the shared Concurrentlinkedqueue
+        on-error (fn [{:keys [queue-name error]}]
+                   (log/errorf "%s fail" queue-name)
+                   (log/error error))
+        listener-thread (future-call #(op/listen-and-notify conn {:queue-name queue-name
+                                                                  :callback conveyor
+                                                                  :on-error on-error}))
+        pool (future (mapv (fn [i]
+                             (let [name (str "taskmaster-" queue-name "-" i)
+                                   wrapped-callback (op/wrap-callback conn {:queue-name queue-name
+                                                                            :callback callback})
+                                   thr (Thread. (fn processor []
+                                                  (log/infof "procesor=start name=%s" name)
+                                                  (while true
+                                                    (when-let [el (.poll ^ConcurrentLinkedQueue queue)]
+                                                      (wrapped-callback))
+                                                    (Thread/sleep 25)))
+                                                name)]
+                               (.start ^Thread thr)
+                               thr))
+                           (vec (range 0 concurrency))))]
+    ;; catchup on pending jobs
+    (.offer queue "ping")
+    ;; return the consumer record, along with the "thread pool" and the listener
+    (->Consumer queue-name listener-thread @pool)))
 
-(defn stop! [pool]
-  (log/infof "pool=%s stopping" pool)
-  (.awaitTermination pool 5 TimeUnit/SECONDS)
-  (.shutdownNow pool))
 
 (defn put! [conn {:keys [queue-name payload]}]
+  {:pre [(valid-queue-name? queue-name)
+         (map? payload)]}
+  (log/debugf "put queue=%s job=%s" queue-name payload)
   (op/put! conn {:queue-name queue-name
                  :payload payload}))

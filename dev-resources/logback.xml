@@ -7,7 +7,7 @@
 
   <logger name="com.zaxxer.hikari" level="error" />
 
-  <root level="info">
+  <root level="debug">
     <appender-ref ref="STDOUT" />
   </root>
 </configuration>

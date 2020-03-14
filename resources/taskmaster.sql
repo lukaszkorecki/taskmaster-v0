@@ -9,7 +9,9 @@ create table if not exists :i:table-name  (
   created_at timestamptz default now()
 );
 
-create index if not exists idx_taskmaster_unlocked_jobs
+create index if not exists
+
+--~ (str "idx_" (:table-name params) "_unlocked_jobs")
 
 on :i:table-name (queue_name, id, run_count)
 
@@ -18,32 +20,56 @@ where locked_at is null;
 -- :name drop-jobs-table*! :!
 
 drop table if exists :i:table-name;
-drop function  taskmaster_jobs_notify();
-drop trigger if exists taskmaster_jobs_notify on :i:table-name;
+drop function
+--~ (str (:table-name params) "_notify()")
+;
+
+drop trigger if exists
+--~ (str (:table-name params) "_notify")
+on :i:table-name;
 
 -- :name setup-triggers*! :!
 
-create or replace function taskmaster_jobs_notify() returns trigger as $$ begin
-  perform pg_notify(new.queue_name, ''); return null;
+create or replace function
+
+--~ (str (:table-name params) "_notify()")
+
+returns trigger as $$ begin
+  perform pg_notify(new.queue_name, '');
+  return null;
 end $$ language plpgsql;
 
-drop trigger if exists taskmaster_jobs_notify on :i:table-name;
+drop trigger if exists
 
-create trigger taskmaster_jobs_notify
+--~ (str (:table-name params) "_notify")
+
+on :i:table-name;
+
+create trigger
+--~ (str (:table-name params) "_notify")
   after insert on :i:table-name for each row
-  execute procedure taskmaster_jobs_notify();
+  execute procedure
+
+--~ (str (:table-name params) "_notify()")
+;
 
 
 -- :name ping* :? :1
 
 select 1
 
--- :name unlock-dead-workers*! :!
+-- :name unlock-dead-consumers*! :!
 
 update :i:table-name
   set locked_at = null, locked_by = null
 
 where locked_by not in (select pid from pg_stat_activity);
+
+-- :name find-pending-jobs* :?
+
+select * from :i:table-name
+
+where run_count = 0 and locked_by = null and queue_name = :queue-name
 
 -- :name put*! :<! :1
 insert into :i:table-name

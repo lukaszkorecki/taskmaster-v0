@@ -6,19 +6,26 @@
 
 (def c1 (.start (c/make-one)))
 
+(def qs (atom []))
+
+
 (defn callback [{:keys [id queue-name payload] :as job}]
-  (log/infof "got-job q=%s %s" queue-name id)
+  (log/infof "got-job t=%s q=%s %s" (.getName (Thread/currentThread)) queue-name payload)
+  (swap! qs conj id)
+  (log/info (count (set @qs)))
   (let [res   (if (and (:some-number payload) (even? (:some-number payload)))
-                :taskmaster.queue/ack
-                :taskmaster.queue/reject)]
+                :taskmaster.operation/ack
+                :taskmaster.operation/reject)]
     (log/info res)
     res))
 
+
 (def work-pool (queue/start!
-                c1
-                {:queue-name "test_queue_1"
-                 :concurrency 2
-                 :callback callback}))
+                 c1
+                 {:queue-name "test_queue_1"
+                  :concurrency 8
+                  :callback callback}))
+
 
 (lc/register-shutdown-hook :stop-worker #(queue/stop! work-pool))
 (lc/install-shutdown-hooks!)
