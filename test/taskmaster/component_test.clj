@@ -110,7 +110,7 @@
   (let [other-syst (component/start-system (make-system "resumable_queue"))]
     (Thread/sleep 5000)
     (is (= 9  (count @all-jobs)))
-    (is (= [2 4 6 8 10 14 16 18] (mapv #(-> % :payload :number) @acked-jobs)))
+    (is (= [2 4 6 8 10 12 14 16 18] (mapv #(-> % :payload :number) @acked-jobs)))
     (try
       (Thread/sleep 2000)
       (component/stop other-syst)
