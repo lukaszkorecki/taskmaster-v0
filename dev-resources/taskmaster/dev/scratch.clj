@@ -1,11 +1,13 @@
 (require '[taskmaster.dev.connection :as c]
          '[taskmaster.component :as com]
          '[clojure.tools.logging :as log]
-         '[com.stuartsierra.component :as component]
-         )
+         '[com.stuartsierra.component :as component])
+
 
 (def qs (atom []))
-               (defn callback [{:keys [id queue-name payload component] :as job}]
+
+
+(defn callback [{:keys [id queue-name payload component] :as job}]
 
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
@@ -23,11 +25,17 @@
               (com/create-consumer {:queue-name "t3"
                                     :callback callback
                                     :concurrency 2})
-              [:db-conn :some-thing]
-              )
+              [:db-conn :some-thing])
    :some-thing {:some :thing}
    :publisher (component/using
                (com/create-publisher)
                [:db-conn])})
+
+
 (def SYS
   (component/start-system (component/map->SystemMap system)))
+
+
+(com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
+
+(component/stop SYS)

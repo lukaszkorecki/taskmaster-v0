@@ -3,7 +3,7 @@
    [clojure.tools.logging :as log]
    [utility-belt.sql.conv]
    [utility-belt.sql.helpers :as sql]
-    ;; load coercions
+   ;; load coercions
    [utility-belt.sql.model :as model])
   (:import
    (com.zaxxer.hikari
@@ -16,6 +16,7 @@
    (org.postgresql.core
     Notification)))
 
+
 (declare ping*
          create-jobs-table*!
          drop-jobs-table*!
@@ -27,39 +28,50 @@
          delete-all*!
          queue-size*)
 
+
 (model/load-sql-file "taskmaster.sql" {:mode :kebab-maps})
 
 (def ^:dynamic *job-table-name* "taskmaster_jobs")
+
 
 (defn create-jobs-table! [conn]
   (create-jobs-table*! conn {:table-name *job-table-name*})
   (setup-triggers*! conn {:table-name *job-table-name*}))
 
+
 (defn drop-jobs-table! [conn]
   (drop-jobs-table*! conn {:table-name *job-table-name*}))
+
 
 (defn unlock-dead-consumers! [conn]
   (unlock-dead-consumers*! conn {:table-name *job-table-name*}))
 
+
 (defn put! [conn {:keys [queue-name payload]}]
   (put*! conn {:table-name *job-table-name* :queue-name queue-name :payload payload}))
+
 
 (defn lock! [conn {:keys [queue-name]}]
   (lock*! conn {:table-name *job-table-name*
                 :table-name-id (str *job-table-name* ".id")
                 :queue-name queue-name}))
 
+
 (defn unlock! [conn {:keys [id]}]
   (unlock*! conn {:table-name *job-table-name* :id id}))
+
 
 (defn delete-job! [conn {:keys [id]}]
   (delete-job*! conn {:table-name *job-table-name* :id id}))
 
+
 (defn delete-all! [conn {:keys [queue-name]}]
   (delete-all*! conn {:table-name *job-table-name* :queue-name queue-name}))
 
+
 (defn queue-size [conn {:keys [queue-name]}]
   (queue-size* conn {:table-name *job-table-name* :queue-name queue-name}))
+
 
 (defn listen-and-notify [{:keys [datasource] :as conn}
                          {:keys [queue-name callback on-error interval-ms] :as opts}]
@@ -79,6 +91,7 @@
       (if on-error
         (on-error {:queue-name queue-name :error e})
         (throw e)))))
+
 
 (defn wrap-callback
   "Wrap the callback function in such a way, that it deletes the jobs
