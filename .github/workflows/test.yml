@@ -15,9 +15,9 @@ jobs:
         env:
           POSTGRES_USER: taskmaster
           POSTGRES_PASSWORD: password
-          POSTGRES_DB: taskmaster_test
+          POSTGRES_DB: taskmaster
         ports:
-          - 5438:5432
+          - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
@@ -39,4 +39,5 @@ jobs:
       run: lein test 2>&1
       env:
         PG_HOST: postgres
-        PG_PORT: 5438
+        PG_PORT: 5432
+        PG_NAME: taskmaster_test
