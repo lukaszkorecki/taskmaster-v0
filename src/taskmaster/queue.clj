@@ -35,7 +35,6 @@
          (valid-queue-name? queue-name)]}
   (let [_ (log/warnf "unlocking queue-name=%s"  queue-name)
         _ (op/unlock-dead-consumers! conn)
-        ;; pool (Executors/newFixedThreadPool concurrency)
         queue (ConcurrentLinkedQueue.)
         conveyor (fn conveyor [notification] (mapv #(.offer ^ConcurrentLinkedQueue queue %) notification))
         _ (log/infof "pool=starting queue-name=%s concurrency=%s" queue-name concurrency)

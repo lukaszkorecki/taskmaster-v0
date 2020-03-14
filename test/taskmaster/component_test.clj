@@ -13,6 +13,7 @@
 (def rejected-jobs (atom []))
 
 (def all-jobs (atom []))
+(def alt-queue-jobs (atom []))
 
 (defn injected-fn [payload] (swap! all-jobs conj payload))
 
@@ -32,8 +33,12 @@
     ::op/ack
     ::op/reject))
 
+(defn alt-callback [job]
+  (swap! alt-queue-jobs conj (dissoc  job :component))
+  ::op/ack)
 
-(defn make-system [queue-name]
+
+(defn make-system [queue-name callback]
   (component/map->SystemMap
    {:db-conn (conn/make-one)
     :consumer (component/using
@@ -68,7 +73,7 @@
                       (with-redefs  [taskmaster.operation/*job-table-name*  "taskmaster_test"]
                         ;; this has to happen outside of the system as we need the table to exist!
                         (when (setup!)
-                          (reset! SYS (component/start-system (make-system queue-name))))
+                          (reset! SYS (component/start-system (make-system queue-name callback))))
                         (test-fn)
                         (when (cleanup!)
                           (swap! SYS component/stop)))))
@@ -105,12 +110,22 @@
   ;; start another system, with alternative consumer
   ;; but push jobs before that happens
   (mapv (fn [i]
-          (ts/put! (:publisher @SYS) {:queue-name "resumable_queue" :payload {:number (* i 2)}}))
+          (ts/put! (:publisher @SYS) {:queue-name "resumable_queue" :payload {:number (* i 2)}})
+          (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number (* i 2)}}))
         (range 1 10))
-  (let [other-syst (component/start-system (make-system "resumable_queue"))]
-    (Thread/sleep 5000)
-    (is (= 9  (count @all-jobs)))
-    (is (= [2 4 6 8 10 12 14 16 18] (mapv #(-> % :payload :number) @acked-jobs)))
+  (let [other-syst (component/start-system (make-system "resumable_queue" alt-callback))]
+    (Thread/sleep 7000)
+    ;; only 9 here, because alt callback sends the data here
+    (is (= 9  (count @alt-queue-jobs)))
+    ;; the original consumer, setup in fixtures
+    (is (= 9 (count @all-jobs)))
+    ;; both consumers!
+    (is (= 18 (count @acked-jobs)))
+    (testing "it doesn't pick up jobs from other queue!"
+      (is (= #{"resumable_queue"}
+             (->> @alt-queue-jobs
+                  (map :queue-name)
+                  set))))
     (try
       (Thread/sleep 2000)
       (component/stop other-syst)

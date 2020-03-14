@@ -91,7 +91,8 @@
       ::interrupt) ; noop
     (catch Exception e
       (log/error "Listen notify error: \n" e)
-      (if on-error
+      ;; TODO: can we ignore this?
+      #_ (if on-error
         (on-error {:queue-name queue-name :error e})
         (throw e)))))
 
@@ -105,13 +106,13 @@
       (let [jobs (lock! tx {:queue-name queue-name})]
         (log/infof "jobs-count=%s" (count jobs))
         (mapv (fn run-job [{:keys [id] :as job}]
-                (log/infof "job-id=%s start" id)
+                (log/debugf "job-id=%s start" id)
                 (let [res (callback job)]
                   (log/infof "job-id=%s result=%s" id res)
                   ;; FIXME - raise if keyword is not qualified to taskmaster.operation?
                   (when (= ::ack res)
                     (let [del-res (delete-job! tx {:id id})]
-                      (log/infof "job-id=%s ack delete=%s" id del-res)))
+                      (log/debugf "job-id=%s ack delete=%s" id del-res)))
                   (let [unlock-res (unlock! tx {:id id})]
-                    (log/infof "job-id=%s unlock %s" id unlock-res))))
+                    (log/debugf "job-id=%s unlock %s" id unlock-res))))
               jobs)))))
