@@ -13,7 +13,7 @@
 (defrecord Consumer [queue-name listener pool]
   Closeable
   (close [this]
-    (log/infof "listener=stop queue-name=%s" queue-name)
+    (log/warnf "listener=stop queue-name=%s" queue-name)
     (mapv #(.stop ^Thread %) pool)
     (future-cancel listener)))
 
@@ -33,7 +33,7 @@
   {:pre [(pos? concurrency)
          (fn? callback)
          (valid-queue-name? queue-name)]}
-  (let [_ (log/infof "unlocking queue-name=%s"  queue-name)
+  (let [_ (log/warnf "unlocking queue-name=%s"  queue-name)
         _ (op/unlock-dead-consumers! conn)
         ;; pool (Executors/newFixedThreadPool concurrency)
         queue (ConcurrentLinkedQueue.)
@@ -53,7 +53,6 @@
                                                                   :on-error on-error}))
         pool (future (mapv (fn [i]
                              (let [name (str "taskmaster-" queue-name "-" i)
-                                   _ (log/info name)
                                    wrapped-callback (op/wrap-callback conn {:queue-name queue-name
                                                                             :callback callback})
                                    thr (Thread. (fn processor []
@@ -67,7 +66,8 @@
                                thr))
                            (vec (range 0 concurrency))))]
     ;; catchup on pending jobs
-    ((op/wrap-callback conn {:queue-name queue-name :callback callback}))
+    (.offer queue "ping")
+    ;; return the consumer record, along with the "thread pool" and the listener
     (->Consumer queue-name listener-thread @pool)))
 
 
