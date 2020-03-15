@@ -22,16 +22,16 @@
   (.close ^Closeable consumer))
 
 
-(defn- valid-queue-name?
+(defn valid-queue-name?
   "Ensure there is a queue name and that it doesn't contain . in the name"
   [q]
   (and (not (str/blank? q))
        (not (re-find #"\." q))))
 
 
-(defn start! [conn {:keys [queue-name callback concurrency]}]
+(defn start! [conn {:keys [queue-name handler concurrency]}]
   {:pre [(pos? concurrency)
-         (fn? callback)
+         (fn? handler)
          (valid-queue-name? queue-name)]}
   (let [_ (log/warnf "unlocking queue-name=%s"  queue-name)
         _ (op/unlock-dead-consumers! conn)
@@ -48,17 +48,17 @@
                    (log/errorf "%s fail" queue-name)
                    (log/error error))
         listener-thread (future-call #(op/listen-and-notify conn {:queue-name queue-name
-                                                                  :callback conveyor
+                                                                  :handler conveyor
                                                                   :on-error on-error}))
         pool (future (mapv (fn [i]
                              (let [name (str "taskmaster-" queue-name "-" i)
-                                   wrapped-callback (op/wrap-callback conn {:queue-name queue-name
-                                                                            :callback callback})
+                                   wrapped-handler (op/wrap-handler conn {:queue-name queue-name
+                                                                            :handler handler})
                                    thr (Thread. (fn processor []
                                                   (log/infof "procesor=start name=%s" name)
                                                   (while true
                                                     (when-let [el (.poll ^ConcurrentLinkedQueue queue)]
-                                                      (wrapped-callback))
+                                                      (wrapped-handler))
                                                     (Thread/sleep 25)))
                                                 name)]
                                (.start ^Thread thr)

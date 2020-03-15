@@ -7,7 +7,7 @@
 (def qs (atom []))
 
 
-(defn callback [{:keys [id queue-name payload component] :as job}]
+(defn handler [{:keys [id queue-name payload component] :as job}]
 
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
@@ -23,7 +23,7 @@
   {:db-conn (c/make-one)
    :consumer (component/using
               (com/create-consumer {:queue-name "t3"
-                                    :callback callback
+                                    :handler handler
                                     :concurrency 2})
               [:db-conn :some-thing])
    :some-thing {:some :thing}

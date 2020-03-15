@@ -32,7 +32,7 @@ You'll need a Postgres server, and a databsae created. Then you can create the n
 
 :warning: This has to run before you start any consumers, as they will attempt to fetch any unprocessed jobs while starting!
 
-Now you can define your consumer, and a callback function which will process each job. If processing is done, return `:taskmaster.operation/ack` qualified symbol. If not, return `:taskmaster.operation/reject`.
+Now you can define your consumer, and a handler function which will process each job. If processing is done, return `:taskmaster.operation/ack` qualified symbol. If not, return `:taskmaster.operation/reject`.
 
 That will *keep the failed job data in the jobs table* so that you can:
 
@@ -43,7 +43,7 @@ That will *keep the failed job data in the jobs table* so that you can:
 
 ```clojure
 
-(defn callback [{:keys [payload]}]
+(defn handler [{:keys [payload]}]
   (if (do/some-other-work payload)
     :taskmaster.operation/ack
     :taskmaster.operation/reject))
@@ -54,7 +54,7 @@ Let's define a consumer:
 ```clojure
 (def consumer
   (taskmaster.queue/start! jdbc-conn {:queue-name "do_work_yo"
-                                      :callback callback
+                                      :handler handler
                                       :concurrency 3}))
 
 
@@ -97,7 +97,7 @@ Recommended way is to use a [Component](https://github.com/stuartsierra/componen
 
 
 ;; `component` is the whole consumer component here - so you have access to its' dependencies
-(defn callback [{:keys [id queue-name payload component] :as job}]
+(defn handler [{:keys [id queue-name payload component] :as job}]
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
   (log/info (count (set @qs)))
@@ -112,7 +112,7 @@ Recommended way is to use a [Component](https://github.com/stuartsierra/componen
   {:db-conn (c/make-one)
    :consumer (component/using
               (com/create-consumer {:queue-name "t3"
-                                    :callback callback
+                                    :handler handler
                                     :concurrency 2})
               [:db-conn :some-thing])
    :some-thing {:some :thing}

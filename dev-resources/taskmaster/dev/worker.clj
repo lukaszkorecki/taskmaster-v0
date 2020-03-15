@@ -9,7 +9,7 @@
 (def qs (atom []))
 
 
-(defn callback [{:keys [id queue-name payload] :as job}]
+(defn handler [{:keys [id queue-name payload] :as job}]
   (log/infof "got-job t=%s q=%s %s" (.getName (Thread/currentThread)) queue-name payload)
   (swap! qs conj id)
   (log/info (count (set @qs)))
@@ -24,7 +24,7 @@
                  c1
                  {:queue-name "test_queue_1"
                   :concurrency 8
-                  :callback callback}))
+                  :handler handler}))
 
 
 (lc/register-shutdown-hook :stop-worker #(queue/stop! work-pool))

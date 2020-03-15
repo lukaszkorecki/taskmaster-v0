@@ -77,14 +77,14 @@
 
 
 (defn listen-and-notify [{:keys [datasource] :as conn}
-                         {:keys [queue-name callback on-error interval-ms] :as opts}]
+                         {:keys [queue-name handler on-error interval-ms] :as opts}]
   (try
     (let [raw-conn (.getConnection ^HikariDataSource datasource)
           pg-conn (.unwrap ^HikariProxyConnection  raw-conn PGConnection)]
       (ping* pg-conn)
       (listen* pg-conn {:queue-name queue-name})
       (while true
-        (callback (map #(.getParameter ^Notification %)
+        (handler (map #(.getParameter ^Notification %)
                        (.getNotifications ^PGConnection pg-conn)))
         (Thread/sleep (or interval-ms 500))))
     (catch InterruptedException _
@@ -97,17 +97,17 @@
         (throw e)))))
 
 
-(defn wrap-callback
-  "Wrap the callback function in such a way, that it deletes the jobs
+(defn wrap-handler
+  "Wrap the handler function in such a way, that it deletes the jobs
   once they're processed successfully"
-  [conn {:keys [queue-name callback]}]
-  (fn consumer-callback []
+  [conn {:keys [queue-name handler]}]
+  (fn consumer-handler []
     (sql/with-transaction [tx conn]
       (let [jobs (lock! tx {:queue-name queue-name})]
         (log/infof "jobs-count=%s" (count jobs))
         (mapv (fn run-job [{:keys [id] :as job}]
                 (log/debugf "job-id=%s start" id)
-                (let [res (callback job)]
+                (let [res (handler job)]
                   (log/infof "job-id=%s result=%s" id res)
                   ;; FIXME - raise if keyword is not qualified to taskmaster.operation?
                   (when (= ::ack res)

@@ -18,32 +18,32 @@
 (defn injected-fn [payload] (swap! all-jobs conj payload))
 
 
-(defn recorder-middleware [callback]
+(defn recorder-middleware [handler]
   (fn [payload]
-    (let [res (callback payload)]
+    (let [res (handler payload)]
       (if (= ::op/ack res)
         (swap! acked-jobs conj (dissoc payload :component))
         (swap! rejected-jobs conj (dissoc payload :component)))
       res)))
 
 
-(defn callback [{:keys [id queue-name payload component] :as job}]
+(defn handler [{:keys [id queue-name payload component] :as job}]
   ((:injected-fn component) (dissoc job :component))
   (if (even? (:number payload))
     ::op/ack
     ::op/reject))
 
-(defn alt-callback [job]
+(defn alt-handler [job]
   (swap! alt-queue-jobs conj (dissoc  job :component))
   ::op/ack)
 
 
-(defn make-system [queue-name callback]
+(defn make-system [queue-name handler]
   (component/map->SystemMap
    {:db-conn (conn/make-one)
     :consumer (component/using
                (ts/create-consumer {:queue-name queue-name
-                                    :callback (recorder-middleware callback)
+                                    :handler (recorder-middleware handler)
                                     :concurrency 2})
                [:db-conn :injected-fn])
     :injected-fn injected-fn
@@ -73,7 +73,7 @@
                       (with-redefs  [taskmaster.operation/*job-table-name*  "taskmaster_test"]
                         ;; this has to happen outside of the system as we need the table to exist!
                         (when (setup!)
-                          (reset! SYS (component/start-system (make-system queue-name callback))))
+                          (reset! SYS (component/start-system (make-system queue-name handler))))
                         (test-fn)
                         (when (cleanup!)
                           (swap! SYS component/stop)))))
@@ -113,9 +113,9 @@
           (ts/put! (:publisher @SYS) {:queue-name "resumable_queue" :payload {:number (* i 2)}})
           (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number (* i 2)}}))
         (range 1 10))
-  (let [other-syst (component/start-system (make-system "resumable_queue" alt-callback))]
+  (let [other-syst (component/start-system (make-system "resumable_queue" alt-handler))]
     (Thread/sleep 7000)
-    ;; only 9 here, because alt callback sends the data here
+    ;; only 9 here, because alt handler sends the data here
     (is (= 9  (count @alt-queue-jobs)))
     ;; the original consumer, setup in fixtures
     (is (= 9 (count @all-jobs)))
