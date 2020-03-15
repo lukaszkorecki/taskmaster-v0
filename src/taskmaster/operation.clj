@@ -90,11 +90,7 @@
     (catch InterruptedException _
       ::interrupt) ; noop
     (catch Exception e
-      (log/error "Listen notify error: \n" e)
-      ;; TODO: can we ignore this?
-      #_ (if on-error
-        (on-error {:queue-name queue-name :error e})
-        (throw e)))))
+      (log/error e "Listen notify error: \n"))))
 
 
 (defn wrap-handler
@@ -104,11 +100,11 @@
   (fn consumer-handler []
     (sql/with-transaction [tx conn]
       (let [jobs (lock! tx {:queue-name queue-name})]
-        (log/infof "jobs-count=%s" (count jobs))
+        (log/debugf "jobs-count=%s" (count jobs))
         (mapv (fn run-job [{:keys [id] :as job}]
                 (log/debugf "job-id=%s start" id)
                 (let [res (handler job)]
-                  (log/infof "job-id=%s result=%s" id res)
+                  (log/debugf "job-id=%s result=%s" id res)
                   ;; FIXME - raise if keyword is not qualified to taskmaster.operation?
                   (when (= ::ack res)
                     (let [del-res (delete-job! tx {:id id})]
