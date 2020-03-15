@@ -1,4 +1,4 @@
-(defproject taskmaster "0.0.1-SNAPSHOT"
+(defproject taskmaster "0.0.2-SNAPSHOT"
   :description "Background publisher/consumer on top of Postgres, next.jdbc and hikari-cp"
   :url "https://github.com/lukaszkorecki/taskmaster"
   :license {:name "Eclipse Public License"
