@@ -10,4 +10,6 @@
                                   [nomnom/utility-belt "1.2.2"]
                                   [org.clojure/clojure "1.10.1"]]
                    :resource-paths ["dev-resources"]}}
-  :deploy-repositories [["releases" :clojars]])
+  :deploy-repositories {"clojars" {:sign-releases false
+                                   :username :env/clojars_username
+                                   :password :env/clojars_password}})
