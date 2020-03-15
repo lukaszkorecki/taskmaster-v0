@@ -77,6 +77,7 @@ By default, job payloads are stored as JSON and Taskmaster is setup to serialize
 That's it, you can now add other fun things like:
 
 - use the [middleware pattern](http://clojure-doc.org/articles/cookbooks/middleware.html) to add instrumentation and error reporting
+  - see example middlewares here: [test/taskmaster/middleware_test.clj](test/taskmaster/middleware_test.clj)
 - spin up multiple consumers to consume from many "queues"
 - add some sort of schema validation when pushing/pulling data off the queue
 
