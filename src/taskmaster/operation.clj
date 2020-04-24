@@ -76,6 +76,11 @@
   (queue-size* conn {:table-name *job-table-name* :queue-name queue-name}))
 
 
+(defn- get-notifications [^PGConnection pg-conn]
+  (when-not (.isClosed ^PGConnection pg-conn)
+    (map #(.getParameter ^Notification %)
+         (.getNotifications ^PGConnection pg-conn))))
+
 (defn listen-and-notify [{:keys [datasource] :as conn}
                          {:keys [queue-name handler on-error interval-ms] :as opts}]
   (try
@@ -84,8 +89,7 @@
       (ping* pg-conn)
       (listen* pg-conn {:queue-name queue-name})
       (while true
-        (handler (map #(.getParameter ^Notification %)
-                       (.getNotifications ^PGConnection pg-conn)))
+        (handler (get-notifications pg-conn))
         (Thread/sleep (or interval-ms 500))))
     (catch InterruptedException _
       ::interrupt) ; noop
