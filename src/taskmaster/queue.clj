@@ -1,13 +1,13 @@
 (ns taskmaster.queue
   (:require
-   [clojure.string :as str]
-   [clojure.tools.logging :as log]
-   [taskmaster.operation :as op])
+    [clojure.string :as str]
+    [clojure.tools.logging :as log]
+    [taskmaster.operation :as op])
   (:import
-   (java.io
-    Closeable)
-   (java.util.concurrent
-    ConcurrentLinkedQueue)))
+    (java.io
+      Closeable)
+    (java.util.concurrent
+      ConcurrentLinkedQueue)))
 
 
 (defrecord Consumer [queue-name listener pool]
@@ -53,7 +53,7 @@
         pool (future (mapv (fn [i]
                              (let [name (str "taskmaster-" queue-name "-" i)
                                    wrapped-handler (op/wrap-handler conn {:queue-name queue-name
-                                                                            :handler handler})
+                                                                          :handler handler})
                                    thr (Thread. (fn processor []
                                                   (log/infof "procesor=start name=%s" name)
                                                   (while true

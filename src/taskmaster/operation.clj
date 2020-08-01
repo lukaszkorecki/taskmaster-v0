@@ -1,20 +1,20 @@
 (ns taskmaster.operation
   (:require
-   [clojure.tools.logging :as log]
-   [utility-belt.sql.conv]
-   [utility-belt.sql.helpers :as sql]
-   ;; load coercions
-   [utility-belt.sql.model :as model])
+    [clojure.tools.logging :as log]
+    [utility-belt.sql.conv]
+    [utility-belt.sql.helpers :as sql]
+    ;; load coercions
+    [utility-belt.sql.model :as model])
   (:import
-   (com.zaxxer.hikari
-    HikariDataSource)
-   (com.zaxxer.hikari.pool
-    HikariProxyConnection)
-   (org.postgresql
-    PGConnection
-    PGNotification)
-   (org.postgresql.core
-    Notification)))
+    (com.zaxxer.hikari
+      HikariDataSource)
+    (com.zaxxer.hikari.pool
+      HikariProxyConnection)
+    (org.postgresql
+      PGConnection
+      PGNotification)
+    (org.postgresql.core
+      Notification)))
 
 
 (declare ping*
@@ -45,6 +45,7 @@
 
 (defn unlock-dead-consumers! [conn]
   (unlock-dead-consumers*! conn {:table-name *job-table-name*}))
+
 
 (defn find-pending-jobs [conn {:keys [queue-name]}]
   (find-pending-jobs* conn {:table-name *job-table-name* :queue-name queue-name}))
@@ -80,6 +81,7 @@
   (when-not (.isClosed ^PGConnection pg-conn)
     (map #(.getParameter ^Notification %)
          (.getNotifications ^PGConnection pg-conn))))
+
 
 (defn listen-and-notify [{:keys [datasource] :as conn}
                          {:keys [queue-name handler on-error interval-ms] :as opts}]

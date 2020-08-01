@@ -1,7 +1,7 @@
 (ns taskmaster.component
   (:require
-   [clojure.tools.logging :as log]
-   [taskmaster.queue :as queue]))
+    [clojure.tools.logging :as log]
+    [taskmaster.queue :as queue]))
 
 ;; Doesn't depend on the lifecycle, e.g. is stateless really
 ;; so doesn't depend on the Component Lifecycle protocol
@@ -31,17 +31,17 @@
 (if has-component?
   (do
     (defrecord Consumer
-        [queue-name config concurrency handler
+      [queue-name config concurrency handler
          ;; dependencies
-         db-conn
+       db-conn
          ;; internal state
-         consumer-pool]
+       consumer-pool]
       component/Lifecycle
       (start [this]
         (if (:consumer-pool this)
           this
           (let [handler-with-dependencies (fn handler-with-dependencies [payload]
-                                             (handler (assoc payload :component this)))
+                                            (handler (assoc payload :component this)))
                 consumer-pool (queue/start! db-conn {:queue-name queue-name
                                                      :handler handler-with-dependencies
                                                      :concurrency concurrency})]

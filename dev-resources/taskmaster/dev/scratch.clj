@@ -22,14 +22,14 @@
 (def system
   {:db-conn (c/make-one)
    :consumer (component/using
-              (com/create-consumer {:queue-name "t3"
-                                    :handler handler
-                                    :concurrency 2})
-              [:db-conn :some-thing])
+               (com/create-consumer {:queue-name "t3"
+                                     :handler handler
+                                     :concurrency 2})
+               [:db-conn :some-thing])
    :some-thing {:some :thing}
    :publisher (component/using
-               (com/create-publisher)
-               [:db-conn])})
+                (com/create-publisher)
+                [:db-conn])})
 
 
 (def SYS

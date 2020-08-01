@@ -1,6 +1,8 @@
 (ns taskmaster.middleware.logging
-  (:require [taskmaster.operation :as op]
-   [clojure.tools.logging :as log]))
+  (:require
+    [clojure.tools.logging :as log]
+    [taskmaster.operation :as op]))
+
 
 (defn with-log [handler]
   (fn logger [{:keys [id queue-name] :as job}]

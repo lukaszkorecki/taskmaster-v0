@@ -1,10 +1,10 @@
 (ns taskmaster.component-test
   (:require
-   [clojure.test :refer :all]
-   [com.stuartsierra.component :as component]
-   [taskmaster.component :as ts]
-   [taskmaster.dev.connection :as conn]
-   [taskmaster.operation :as op]))
+    [clojure.test :refer :all]
+    [com.stuartsierra.component :as component]
+    [taskmaster.component :as ts]
+    [taskmaster.dev.connection :as conn]
+    [taskmaster.operation :as op]))
 
 
 (def queue-name "test_component_queue")
@@ -33,6 +33,7 @@
     ::op/ack
     ::op/reject))
 
+
 (defn alt-handler [job]
   (swap! alt-queue-jobs conj (dissoc  job :component))
   ::op/ack)
@@ -40,16 +41,16 @@
 
 (defn make-system [queue-name handler]
   (component/map->SystemMap
-   {:db-conn (conn/make-one)
-    :consumer (component/using
-               (ts/create-consumer {:queue-name queue-name
-                                    :handler (recorder-middleware handler)
-                                    :concurrency 2})
-               [:db-conn :injected-fn])
-    :injected-fn injected-fn
-    :publisher (component/using
-                (ts/create-publisher)
-                [:db-conn])}))
+    {:db-conn (conn/make-one)
+     :consumer (component/using
+                 (ts/create-consumer {:queue-name queue-name
+                                      :handler (recorder-middleware handler)
+                                      :concurrency 2})
+                 [:db-conn :injected-fn])
+     :injected-fn injected-fn
+     :publisher (component/using
+                  (ts/create-publisher)
+                  [:db-conn])}))
 
 
 (def SYS (atom nil))
@@ -104,6 +105,29 @@
               {:id 3 :payload {:number 6} :queue-name queue-name}
               {:id 4 :payload {:number 1} :queue-name queue-name}]
              (map #(select-keys % [:id :queue-name :payload]) @all-jobs))))))
+
+
+#_ (deftest failed-job-handling
+  (let [alt-syst (component/start-system (make-system "retrying_queue" handler))]
+    (testing "it doesn't try to run the failed job on restart"
+      (ts/put! (:publisher @SYS) {:queue-name "retrying_queue" :payload {:number 1}})
+      (Thread/sleep 2000)
+    (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
+    (is (= {:count 1}
+           (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+    (is (= 1 (count @rejected-jobs)))
+    (component/stop alt-syst)
+    (component/start alt-syst)
+    (Thread/sleep 1000)
+    (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
+    (is (= {:count 1}
+           (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+    (is (= 1 (count @rejected-jobs)))
+    (try
+      (Thread/sleep 2000)
+      (component/stop alt-syst)
+      (catch Exception _
+        :noop)))))
 
 
 (deftest resume-consumption

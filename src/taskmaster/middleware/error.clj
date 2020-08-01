@@ -1,6 +1,8 @@
 (ns taskmaster.middleware.error
-  (:require [taskmaster.operation :as op]
-   [clojure.tools.logging :as log]))
+  (:require
+    [clojure.tools.logging :as log]
+    [taskmaster.operation :as op]))
+
 
 (defn with-error [handler]
   (fn error-catcher [{:keys [id queue-name] :as job}]
