@@ -1,14 +1,22 @@
-(require '[taskmaster.dev.connection :as c]
-         '[taskmaster.component :as com]
-         '[clojure.tools.logging :as log]
-         '[com.stuartsierra.component :as component])
+(ns user ; scratch
+  (:require
+    [clojure.tools.logging :as log]
+    [com.stuartsierra.component :as component]
+    [taskmaster.component :as com]
+    [taskmaster.operation :as op]
+    [taskmaster.dev.connection :as c]))
 
 
-(def qs (atom []))
 
 
-(defn handler [{:keys [id queue-name payload component] :as job}]
 
+(def ^{:doc "job log"} qs (atom []))
+
+
+(defn handler
+  "Sample handler: if theres a number in :some-number key in the payload
+  and its even, ACK the job, otherwise fail it"
+  [{:keys [id queue-name payload component] :as _job}]
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
   (log/info (count (set @qs)))
@@ -19,7 +27,7 @@
     res))
 
 
-(def system
+(def ^{:doc "sample system"} system
   {:db-conn (c/make-one)
    :consumer (component/using
                (com/create-consumer {:queue-name "t3"
@@ -32,10 +40,9 @@
                 [:db-conn])})
 
 
-(def SYS
-  (component/start-system (component/map->SystemMap system)))
-
-
-(com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
-
-(component/stop SYS)
+(comment
+  (def SYS
+    (component/start-system (component/map->SystemMap system)))
+  (op/create-jobs-table! (:db-conn SYS))
+  (com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
+  (component/stop SYS))
