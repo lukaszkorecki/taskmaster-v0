@@ -11,8 +11,7 @@
     (com.zaxxer.hikari.pool
       HikariProxyConnection)
     (org.postgresql
-      PGConnection
-      PGNotification)
+      PGConnection)
     (org.postgresql.core
       Notification)))
 
@@ -22,11 +21,14 @@
          drop-jobs-table*!
          unlock-dead-consumers*!
          put*!
+         listen*
+         find-pending-jobs*
          lock*!
          unlock*!
          delete-job*!
          delete-all*!
-         queue-size*)
+         queue-size*
+         setup-triggers*!)
 
 
 (model/load-sql-file "taskmaster.sql" {:mode :kebab-maps})
@@ -83,8 +85,8 @@
          (.getNotifications ^PGConnection pg-conn))))
 
 
-(defn listen-and-notify [{:keys [datasource] :as conn}
-                         {:keys [queue-name handler on-error interval-ms] :as opts}]
+(defn listen-and-notify [{:keys [datasource] :as _conn}
+                         {:keys [queue-name handler interval-ms]}]
   (try
     (let [raw-conn (.getConnection ^HikariDataSource datasource)
           pg-conn (.unwrap ^HikariProxyConnection  raw-conn PGConnection)]

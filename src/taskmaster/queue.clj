@@ -57,7 +57,7 @@
                                    thr (Thread. (fn processor []
                                                   (log/infof "procesor=start name=%s" name)
                                                   (while true
-                                                    (when-let [el (.poll ^ConcurrentLinkedQueue queue)]
+                                                    (when-let [_item (.poll ^ConcurrentLinkedQueue queue)]
                                                       (wrapped-handler))
                                                     (Thread/sleep 25)))
                                                 name)]

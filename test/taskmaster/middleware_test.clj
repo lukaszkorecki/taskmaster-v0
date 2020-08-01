@@ -1,6 +1,6 @@
 (ns taskmaster.middleware-test
   (:require
-    [clojure.test :refer :all]
+    [clojure.test :refer [deftest is]]
     [clojure.tools.logging.test :as logging.test]
     [taskmaster.middleware.error]
     [taskmaster.middleware.logging]))

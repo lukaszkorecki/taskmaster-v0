@@ -1,6 +1,6 @@
 (ns taskmaster.component-test
   (:require
-    [clojure.test :refer :all]
+    [clojure.test :refer [deftest is testing use-fixtures]]
     [com.stuartsierra.component :as component]
     [taskmaster.component :as ts]
     [taskmaster.dev.connection :as conn]
@@ -27,7 +27,7 @@
       res)))
 
 
-(defn handler [{:keys [id queue-name payload component] :as job}]
+(defn handler [{:keys [payload component] :as job}]
   ((:injected-fn component) (dissoc job :component))
   (if (even? (:number payload))
     ::op/ack
