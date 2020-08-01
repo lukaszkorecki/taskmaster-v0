@@ -4,7 +4,7 @@
 
 Postgres based background processing worker system thing.
 
-Built on top of `next.jdbc`, `hikari-cp`, `hugsql` and `clojure.tools.logging`.
+
 
 :warning: Definitely not usable yet, see `dev-resources/taskmaster/` directory for samples and examples
 
@@ -14,6 +14,7 @@ Recommended environment:
 - Postgres 11
 - JDK 11
 - Clojure 1.10.1
+- HikariCP connection pool
 
 But will probably work with Postgres 9.6, Clojure 1.9 and JDK 8.
 
@@ -36,7 +37,7 @@ Now you can define your consumer, and a handler function which will process each
 
 That will *keep the failed job data in the jobs table* so that you can:
 
-- requeue it by setting `run_out` column to 0
+- requeue it by setting `run_count` column to 0
 - implement a garbage collector and delete them some other time
 
 
@@ -53,9 +54,9 @@ Let's define a consumer:
 
 ```clojure
 (def consumer
-  (taskmaster.queue/start! jdbc-conn {:queue-name "do_work_yo"
-                                      :handler handler
-                                      :concurrency 3}))
+  (taskmaster.queue/start! db-conn {:queue-name "do_work_yo"
+                                    :handler handler
+                                    :concurrency 3}))
 
 
 ```
@@ -67,7 +68,7 @@ Now let's queue up some jobs:
 
 ```clojure
 
-(taskmaster.queue/put! jdbc-conn {:queue-name "do_work_yo" :payload {:send-email "test@example.com"}})
+(taskmaster.queue/put! db-conn {:queue-name "do_work_yo" :payload {:send-email "test@example.com"}})
 ```
 
 By default, job payloads are stored as JSON and Taskmaster is setup to serialize/deserialize it using Cheshire.
@@ -82,7 +83,7 @@ That's it, you can now add other fun things like:
 - add some sort of schema validation when pushing/pulling data off the queue
 
 
-## Component
+## Components
 
 Recommended way is to use a [Component](https://github.com/stuartsierra/component) approach, but it's not stricly necessary:
 
@@ -140,14 +141,25 @@ There are three core parts:
 - an internal `j.u.c ConcurrentLinkedQueue`
 - Postgres' `select ... FOR UPDATE SKIP LOCKED`
 
-When the job table is setup, there's a trigger added to send `NOTIFY` whenever a new record is inserted. Then Taskmaster sets up a listener to receive pings whenever inserts happen. These pings are sent over a `ConcurrentLinkedQueue` to a pool of threads, which pull all job payloads from the table via a transaction and ensure atomicity via `SELECT ... FOR ... SKIP LOCKED`.
+When the job table is setup, there's a trigger added to send `NOTIFY` whenever a new record is inserted. Then Taskmaster sets up a listener to receive pings
+whenever inserts happen. These pings are sent over a `ConcurrentLinkedQueue` to a pool of threads, which
+pull all job payloads from the table via a transaction and ensure atomicity via `SELECT ... FOR ... SKIP LOCKED`.
+
+# Dependencies
+
+Taskmaster is built on top of:
+
+- `cheshire` (serialization for JSONB) + `next.jdbc` + `hikari-cp` (connection pool)  +  `hugsql`  (all of the queries) for the low level bits, most of it's wrapped by `nomnom/utility-belt.sql` to smooth out the edges
+- `clojure.tools.logging` for logs
 
 
 # Roadmap
 
 - [ ] non-deleting mode, where ackd jobs stay in the table, this is useful for reprocessing jobs or gathering some extra metrics
+- [ ] :bug: fix a bug where restarting consumers will pick up previously failed jobs
 - [ ] verify this actually works in production workloads
-- [ ] shed dependencies - atm it pulls in a lot of stuff from [EnjoyHQ's open source projects](https://github.com/nomnom-insights/) - this will make Component dependency truly optional
+- [ ] pluggable serialization (avro, simple text, etc)
+
 
 # Acknowledgments
 
