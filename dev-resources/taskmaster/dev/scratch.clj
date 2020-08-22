@@ -83,11 +83,6 @@
 (R/refresh-all)
 
 
-(->> [{:queue-name "t3", :count 7, :is-failed true} {:queue-name "t3", :count 7, :is-failed false} {:queue-name "t1", :count 1, :is-failed false}]
-     (group-by :queue-name)
-     (map (fn [[gr res]]
-            {:queue-name gr
-             :total (reduce + (map :count res))
-             :failed (or (:count (first (filter :is-failed res))) 0)
-             :pending (or (:count (first (remove :is-failed res))) 0)}))
-     )
+(utility-belt.sql.helpers/execute (:db-conn SYS)
+
+                                  ["update taskmaster_jobs set run_count = 0 where id = ?", 36])
