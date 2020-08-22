@@ -1,13 +1,10 @@
-(ns user ; scratch
+(ns user
   (:require
     [clojure.tools.logging :as log]
     [com.stuartsierra.component :as component]
     [taskmaster.component :as com]
-    [taskmaster.operation :as op]
-    [taskmaster.dev.connection :as c]))
-
-
-
+    [taskmaster.dev.connection :as c]
+    [taskmaster.operation :as op] :reload))
 
 
 (def ^{:doc "job log"} qs (atom []))
@@ -39,6 +36,7 @@
                 (com/create-publisher)
                 [:db-conn])})
 
+
 (def system-publisher-only
   {:db-conn (c/make-one)
    #_ :consumer  #_ (component/using
@@ -51,38 +49,14 @@
                 [:db-conn])})
 
 
-(do ; comment
-  (def SYS
-    (component/start-system (component/map->SystemMap system)))
-  (op/create-jobs-table! (:db-conn SYS))
-  (com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
-  (component/stop SYS))
-
-
 (def SYS
   (component/start-system (component/map->SystemMap system)))
 
 
 (def PUBSYS (component/start-system (component/map->SystemMap system-publisher-only)))
 
-(com/put! (:publisher PUBSYS) {:queue-name "t3" :payload {:some-number 1}})
+(com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 1}})
 
 
-(require '[taskmaster.operation] :reload)
-(taskmaster.operation/queue-stats (:db-conn PUBSYS) #_ {:table-name "taskmaster_jobs"})
-
-(utility-belt.sql.helpers/execute (:db-conn PUBSYS) ["select queue_name, count(run_count), run_count > 0 as is_failed from ? group by queue_name, run_count", "taskmaster_jobs"])
-
-
-(component/stop SYS)
-
-
-(R/refresh-all)
-(component/stop PUBSYS)
-
-(R/refresh-all)
-
-
-(utility-belt.sql.helpers/execute (:db-conn SYS)
-
-                                  ["update taskmaster_jobs set run_count = 0 where id = ?", 36])
+(taskmaster.operation/requeue! (:db-conn SYS)
+                               {:queue-name "t3" :id [46]})

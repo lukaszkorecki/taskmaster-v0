@@ -74,15 +74,22 @@ WHERE run_count = 0 AND locked_by = NULL AND queue_name = :queue-name
 -- :name get-by-ids* :?
 SELECT * FROM :i:table-name
 
-WHERE run_count > :run-COUNT AND queue_name = :queue-name AND id IN (:v:ids)
+WHERE
+  run_count >= :min-run-count
+  AND id IN (:v*:id)
 
 -- :name put*! :<! :1
 INSERT INTO :i:table-name
   (queue_name, payload) VALUES (:queue-name, :payload)
 RETURNING id
 
--- :name lock*! :<!
+-- :name put-many*! :<! :*
 
+INSERT INTO :i:table-name
+(queue_name, payload) VALUES :t*:payloads
+
+
+-- :name lock*! :<!
 WITH selected_job AS (
   SELECT id
   FROM :i:table-name
@@ -113,11 +120,11 @@ SET locked_at = NULL, run_count = run_count + 1
 
 WHERE id = :id
 
--- :name delete-job*! :! :n
+-- :name delete-jobs*! :! :n
 
 DELETE FROM :i:table-name
 
-WHERE id = :id
+WHERE id IN  (:v*:id)
 
 -- :name delete-all*! :!
 

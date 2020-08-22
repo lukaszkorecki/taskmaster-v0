@@ -21,17 +21,21 @@
          drop-jobs-table*!
          unlock-dead-consumers*!
          put*!
+         put-many*!
+         get-by-ids*
+         queue-stats*
          listen*
          find-pending-jobs*
          lock*!
          unlock*!
-         delete-job*!
+         delete-jobs*!
          delete-all*!
          queue-size*
          setup-triggers*!)
 
 
 (model/load-sql-file "taskmaster.sql" {:mode :kebab-maps})
+(model/load-sql-file-vec-fns "taskmaster.sql")
 
 (def ^{:dynamic true :doc "Default name of the table to store job records"} *job-table-name* "taskmaster_jobs")
 
@@ -85,7 +89,7 @@
 (defn delete-job!
   "Launches a missle 🚀"
   [conn {:keys [id]}]
-  (delete-job*! conn {:table-name *job-table-name* :id id}))
+  (delete-jobs*! conn {:table-name *job-table-name* :id [id]}))
 
 
 (defn delete-all!
@@ -112,11 +116,22 @@
                  :failed (or (:count (first (filter :is-failed res))) 0)
                  :pending (or (:count (first (remove :is-failed res))) 0)})))))
 
-(defn requeue
-  "Requeues the job, without changing the payload"
+
+(defn requeue!
+  "Requeues the job, without changing the payload and deletes old ones"
   [conn {:keys [queue-name id]}]
+  {:pre [(every? number? id)]}
   (sql/with-transaction [tx conn]
-  )
+    (let [jobs
+          (->> (get-by-ids* tx {:table-name *job-table-name*
+                                :min-run-count 1
+                                :id id})
+               (map #(vector (:queue-name %) (:payload %))))]
+      (when (seq jobs)
+        (let [new-ids (put-many*! tx {:table-name *job-table-name* :payloads jobs})]
+          (delete-jobs*! conn {:table-name *job-table-name* :id id})
+
+          new-ids)))))
 
 
 (defn- get-notifications
