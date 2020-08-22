@@ -102,7 +102,15 @@
 (defn queue-stats
   "Return number of jobs per queue in the jobs table"
   [conn]
-  (queue-stats* conn {:table-name *job-table-name* }))
+  (let [res (queue-stats* conn {:table-name *job-table-name* })]
+    (->> res
+         (group-by :queue-name)
+     (map (fn [[gr res]]
+            {:queue-name gr
+             :total (reduce + (map :count res))
+             :failed (or (:count (first (filter :is-failed res))) 0)
+             :pending (or (:count (first (remove :is-failed res))) 0)})))
+    ))
 
 
 (defn- get-notifications

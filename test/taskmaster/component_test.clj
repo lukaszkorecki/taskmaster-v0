@@ -157,8 +157,13 @@
           (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number (* i 2)}}))
         (range 1 10))
   (with-db-conn (fn [c]
-  (is (= :x (op/find-pending-jobs c {:queue-name "resumable_queue"})))
-  (is (= :x (op/queue-stats c)))))
+
+                  (is (=
+
+  [{:failed 0 :pending 9 :queue-name "test_component_queue" :total 9}
+    {:failed 0 :pending 9 :queue-name "resumable_queue" :total 9}]
+
+                       (op/queue-stats c)))))
   (let [other-syst (component/start-system (make-system "resumable_queue" alt-handler))]
     (Thread/sleep 7000)
     ;; only 9 here, because alt handler sends the data here
