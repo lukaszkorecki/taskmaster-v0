@@ -126,22 +126,35 @@
         alt-syst (component/start-system (make-system queue-name handler))]
     (testing "fails processing, it doesn't try to run the failed job on consumer restart"
       ;; this wil fail, since :number is not even
-      (ts/put! (:publisher @SYS) {:queue-name "retrying_queue" :payload {:number 1}})
+      (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number 1}})
       (Thread/sleep 2000)
       ;; we got it
       (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
       (is (= {:count 1}
              (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
       (is (= 1 (count @rejected-jobs)))
-      ;; verify that the issue with reprocessing previously failed jobs doesn't persist
-      (component/stop alt-syst)
-      (component/start alt-syst)
-      (Thread/sleep 1000)
-      ;; we have failed jobs, but we didn't consume them again
-      (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
-      (is (= {:count 1}
-             (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
-      (is (= 1 (count @rejected-jobs)))
+      (testing "requeueing"
+        ;; we will requeue the failed job
+        ;; it will still fail, but only 1 job will be stored in PG
+        (let [id (:id (last @rejected-jobs))]
+          (is (= [{:failed 1, :pending 0, :queue-name "retrying_queue", :total 1}]
+                 (op/queue-stats (:db-conn @SYS))))
+          (op/requeue! (:db-conn @SYS) {:queue-name queue-name :id [id]})
+          (Thread/sleep 1500)
+          (is (= [{:failed 1, :pending 0, :queue-name "retrying_queue", :total 1}]
+                 (op/queue-stats (:db-conn @SYS))))
+          (is (= 2 (count @rejected-jobs)))
+          (is (= [1 2] (map :id @rejected-jobs)))))
+      (testing "failures are not picked up on restart"
+        ;; verify that the issue with reprocessing previously failed jobs doesn't persist
+        (reset! rejected-jobs [])
+        (component/stop alt-syst)
+        (component/start alt-syst)
+        (Thread/sleep 1000)
+        ;; we have failed jobs, but we didn't consume them again
+        (is (empty? @rejected-jobs))
+        (is (= {:count 1}
+               (op/queue-size (:db-conn @SYS) {:queue-name queue-name}))))
       (try
         (Thread/sleep 2000)
         (component/stop alt-syst)
@@ -157,13 +170,9 @@
           (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number (* i 2)}}))
         (range 1 10))
   (with-db-conn (fn [c]
-
-                  (is (=
-
-  [{:failed 0 :pending 9 :queue-name "test_component_queue" :total 9}
-    {:failed 0 :pending 9 :queue-name "resumable_queue" :total 9}]
-
-                       (op/queue-stats c)))))
+                  (is (= [{:failed 0 :pending 9 :queue-name "test_component_queue" :total 9}
+                          {:failed 0 :pending 9 :queue-name "resumable_queue" :total 9}]
+                         (op/queue-stats c)))))
   (let [other-syst (component/start-system (make-system "resumable_queue" alt-handler))]
     (Thread/sleep 7000)
     ;; only 9 here, because alt handler sends the data here

@@ -1,10 +1,11 @@
 (ns user
   (:require
+    [:reload]
     [clojure.tools.logging :as log]
     [com.stuartsierra.component :as component]
     [taskmaster.component :as com]
     [taskmaster.dev.connection :as c]
-    [taskmaster.operation :as op] :reload))
+    [taskmaster.operation :as op]))
 
 
 (def ^{:doc "job log"} qs (atom []))
