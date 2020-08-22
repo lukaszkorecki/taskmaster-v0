@@ -3,10 +3,7 @@
 <img src="https://img.cinemablend.com/filter:scale/quill/b/3/6/2/9/9/b36299d3e49f972d430cae647b5bec83ad70eae8.jpg?mw=600" align="right" width=250 >
 
 Postgres based background processing worker system thing.
-
-
-
-:warning: Definitely not usable yet, see `dev-resources/taskmaster/` directory for samples and examples
+:warning: Somewhat usable, see `dev-resources/taskmaster/` directory for samples and examples
 
 Recommended environment:
 
@@ -14,9 +11,16 @@ Recommended environment:
 - Postgres 11
 - JDK 11
 - Clojure 1.10.1
+
+Required:
+
+
+
 - HikariCP connection pool
 
-But will probably work with Postgres 9.6, Clojure 1.9 and JDK 8.
+
+
+> will probably work with Postgres 9.6, Clojure 1.9 and JDK 8.
 
 
 # Usage
@@ -26,20 +30,18 @@ But will probably work with Postgres 9.6, Clojure 1.9 and JDK 8.
 
 You'll need a Postgres server, and a databsae created. Then you can create the necessary jobs table structure:
 
+> :warning: This has to run before you start any consumers, as they will attempt to fetch any unprocessed jobs while starting!
+
 ```clojure
 (taskmaster.operation/create-jobs-table! jdbc-connection)
 
 ```
 
-:warning: This has to run before you start any consumers, as they will attempt to fetch any unprocessed jobs while starting!
+## Defining handlers for consuming jobs
 
-Now you can define your consumer, and a handler function which will process each job. If processing is done, return `:taskmaster.operation/ack` qualified symbol. If not, return `:taskmaster.operation/reject`.
+Now you can define your consumers, and a handler function which will process each job. If processing is done, return `:taskmaster.operation/ack` qualified symbol. If not, return `:taskmaster.operation/reject`.
 
-That will *keep the failed job data in the jobs table* so that you can:
-
-- requeue it by setting `run_count` column to 0
-- implement a garbage collector and delete them some other time
-
+Example:
 
 
 ```clojure
@@ -49,6 +51,21 @@ That will *keep the failed job data in the jobs table* so that you can:
     :taskmaster.operation/ack
     :taskmaster.operation/reject))
 ```
+
+
+Rejecting a job will *keep the failed job data in the jobs table* so that you can:
+
+- requeue it by using `(taskmaster.operation/requeue! conn {:id [faild-job-id-1 failed-job-id-2]})`
+- implement a garbage collector and delete them some other time
+
+Failed jobs can be found by querying for `run_count > 0` or via
+
+
+```clojure
+(taskmaster.operation/find-failed-jobs conn {:queue-name queue-name})
+```
+
+## Consuming
 
 Let's define a consumer:
 
@@ -63,6 +80,8 @@ Let's define a consumer:
 
 Consumer will spin up 1 listener thread to be notified about new reocrds being inserted matching the queue name and 3 threads to process these jobs, in parallel, one at a time.
 
+## Publishing
+
 Now let's queue up some jobs:
 
 
@@ -73,7 +92,8 @@ Now let's queue up some jobs:
 
 By default, job payloads are stored as JSON and Taskmaster is setup to serialize/deserialize it using Cheshire.
 
-## Next steps
+
+# Next steps
 
 That's it, you can now add other fun things like:
 
@@ -85,7 +105,15 @@ That's it, you can now add other fun things like:
 
 ## Components
 
-Recommended way is to use a [Component](https://github.com/stuartsierra/component) approach, but it's not stricly necessary:
+[Component](https://github.com/stuartsierra/component) approach is recommended, but it's not stricly necessary.
+At minimum you'll need
+
+- HikariCP connection pool component
+- Consumer component(s)
+
+Publisher is not necessary, as you can ivoke `taskmaster.queue/put!` directly, but it's good to have one anyway, especially in tests.
+
+### Messy example
 
 
 ```clojure
@@ -94,7 +122,7 @@ Recommended way is to use a [Component](https://github.com/stuartsierra/componen
          '[clojure.tools.logging :as log]
          '[com.stuartsierra.component :as component])
 
-
+;; stores all payloads
 (def qs (atom []))
 
 
@@ -103,6 +131,7 @@ Recommended way is to use a [Component](https://github.com/stuartsierra/componen
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
   (log/info (count (set @qs)))
+  ;; fail the job if some-number in the payload is not even
   (let [res   (if (and (:some-number payload) (even? (:some-number payload)))
                 :taskmaster.operation/ack
                 :taskmaster.operation/reject)]
@@ -129,6 +158,7 @@ Recommended way is to use a [Component](https://github.com/stuartsierra/componen
 
 (com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
 
+;; wait a sec
 (component/stop SYS)
 
 ```
@@ -149,16 +179,27 @@ pull all job payloads from the table via a transaction and ensure atomicity via 
 
 Taskmaster is built on top of:
 
-- `cheshire` (serialization for JSONB) + `next.jdbc` + `hikari-cp` (connection pool)  +  `hugsql`  (all of the queries) for the low level bits, most of it's wrapped by `nomnom/utility-belt.sql` to smooth out the edges
-- `clojure.tools.logging` for logs
+- `clojure.tools.logging` for logs (this repo uses logback as the backend)
+- `cheshire` serialization for JSONB +
+- `next.jdbc`
+- `hikari-cp` - connection pool
+- `hugsql`  all of the queries
+
+Most of it's wrapped by `nomnom/utility-belt.sql` to smooth out the rough edges
+
+
 
 
 # Roadmap
 
+*Unreleased officialy, check on Clojars*
+
+- [x] :bug: fix a bug where restarting consumers will pick up previously failed jobs
 - [ ] non-deleting mode, where ackd jobs stay in the table, this is useful for reprocessing jobs or gathering some extra metrics
-- [ ] :bug: fix a bug where restarting consumers will pick up previously failed jobs
+
 - [ ] verify this actually works in production workloads
-- [ ] pluggable serialization (avro, simple text, etc)
+- [ ] pluggable serialization (avro, simple text, etc) - maybe via middleware?
+- [ ] remove HugSQL and `nomnom/utility-belt.sql` to use `next.jdbc` directly
 
 
 # Acknowledgments
