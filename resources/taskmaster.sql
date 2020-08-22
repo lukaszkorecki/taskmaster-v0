@@ -108,7 +108,7 @@ SET locked_at = NULL, run_count = run_count + 1
 
 WHERE id = :id
 
--- :name delete-job*! :! :1
+-- :name delete-job*! :! :n
 
 DELETE FROM :i:table-name
 

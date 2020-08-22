@@ -40,9 +40,22 @@
                 [:db-conn])})
 
 
-(comment
+(do ; comment
   (def SYS
     (component/start-system (component/map->SystemMap system)))
   (op/create-jobs-table! (:db-conn SYS))
   (com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
   (component/stop SYS))
+
+
+(def SYS
+  (component/start-system (component/map->SystemMap system)))
+
+
+
+  (com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
+
+
+(component/stop SYS)
+
+(R/refresh-all)
