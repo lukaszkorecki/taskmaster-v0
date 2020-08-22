@@ -132,6 +132,7 @@
       (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
       (is (= {:count 1}
              (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+      (is (= [{:number 1}] (map :payload (op/find-failed-jobs (:db-conn @SYS) {:queue-name queue-name}))))
       (is (= 1 (count @rejected-jobs)))
       (testing "requeueing"
         ;; we will requeue the failed job
@@ -139,7 +140,7 @@
         (let [id (:id (last @rejected-jobs))]
           (is (= [{:failed 1, :pending 0, :queue-name "retrying_queue", :total 1}]
                  (op/queue-stats (:db-conn @SYS))))
-          (op/requeue! (:db-conn @SYS) {:queue-name queue-name :id [id]})
+          (op/requeue! (:db-conn @SYS) {:id [id]})
           (Thread/sleep 1500)
           (is (= [{:failed 1, :pending 0, :queue-name "retrying_queue", :total 1}]
                  (op/queue-stats (:db-conn @SYS))))

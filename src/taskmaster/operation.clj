@@ -25,7 +25,7 @@
          get-by-ids*
          queue-stats*
          listen*
-         find-pending-jobs*
+         find-jobs*
          lock*!
          unlock*!
          delete-jobs*!
@@ -59,10 +59,10 @@
   (unlock-dead-consumers*! conn {:table-name *job-table-name*}))
 
 
-(defn find-pending-jobs
-  "Find all jobs which never been run, not locked by anyone and matching given queue"
+(defn find-failed-jobs
+  "Find all failed jobs in given queue"
   [conn {:keys [queue-name]}]
-  (find-pending-jobs* conn {:table-name *job-table-name* :queue-name queue-name}))
+  (find-jobs* conn {:table-name *job-table-name* :queue-name queue-name :run-count 1}))
 
 
 (defn put!
@@ -119,7 +119,7 @@
 
 (defn requeue!
   "Requeues the job, without changing the payload and deletes old ones"
-  [conn {:keys [queue-name id]}]
+  [conn {:keys [id]}]
   {:pre [(every? number? id)]}
   (sql/with-transaction [tx conn]
     (let [jobs

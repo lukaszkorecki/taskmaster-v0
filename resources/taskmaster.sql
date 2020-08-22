@@ -18,7 +18,6 @@ ON :i:table-name (queue_name, id, run_count)
 WHERE locked_at IS NULL;
 
 -- :name drop-jobs-table*! :!
-
 DROP TABLE if EXISTS :i:table-name;
 DROP FUNCTION
 --~ (str (:table-name params) "_notify()")
@@ -29,7 +28,6 @@ DROP TRIGGER if EXISTS
 ON :i:table-name;
 
 -- :name setup-triggers*! :!
-
 CREATE OR replace FUNCTION
 
 --~ (str (:table-name params) "_notify()")
@@ -55,7 +53,6 @@ CREATE TRIGGER
 
 
 -- :name ping* :? :1
-
 SELECT 1
 
 -- :name unlock-dead-consumers*! :!
@@ -65,11 +62,13 @@ UPDATE :i:table-name
 
 WHERE locked_by NOT IN (SELECT pid FROM pg_stat_activity);
 
--- :name find-pending-jobs* :?
+-- :name find-jobs* :?
 
 SELECT * FROM :i:table-name
 
-WHERE run_count = 0 AND locked_by = NULL AND queue_name = :queue-name
+WHERE
+  run_count = :run-count
+  AND queue_name = :queue-name
 
 -- :name get-by-ids* :?
 SELECT * FROM :i:table-name
@@ -92,14 +91,13 @@ INSERT INTO :i:table-name
 -- :name lock*! :<!
 WITH selected_job AS (
   SELECT id
-  FROM :i:table-name
+    FROM :i:table-name
+  WHERE
+    locked_at IS NULL
+    AND queue_name = :queue-name
+    AND run_count = 0
 
-WHERE
-locked_at IS NULL AND
-queue_name = :queue-name AND
-run_count < 1
-
-FOR NO key UPDATE SKIP LOCKED
+    FOR NO key UPDATE SKIP LOCKED
 )
 
 UPDATE :i:table-name
