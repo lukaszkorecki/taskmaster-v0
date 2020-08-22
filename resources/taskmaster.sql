@@ -124,6 +124,11 @@ WHERE queue_name = :queue-name
 
 SELECT COUNT(*) FROM :i:table-name WHERE queue_name = :queue-name
 
+-- :name queue-stats* :? :n
+
+SELECT queue_name, COUNT(queue_name), run_count FROM :i:table-name
+GROUP BY queue_name, run_count
+
 -- :name listen* :?
 
 LISTEN :i:queue-name

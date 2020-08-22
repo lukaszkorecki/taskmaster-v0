@@ -99,6 +99,11 @@
   [conn {:keys [queue-name]}]
   (queue-size* conn {:table-name *job-table-name* :queue-name queue-name}))
 
+(defn queue-stats
+  "Return number of jobs per queue in the jobs table"
+  [conn]
+  (queue-stats* conn {:table-name *job-table-name* }))
+
 
 (defn- get-notifications
   "LOW LEVEL BITS ALERT!

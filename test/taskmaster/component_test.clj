@@ -58,10 +58,19 @@
 (def SYS (atom nil))
 
 
-(defn setup! []
+(defn with-db-conn
+  "Helper to run tasks with a passed in one-off PG connection"
+  [a-fn]
   (let [c (.start (conn/make-one))]
-    (op/create-jobs-table! c)
+    (a-fn c)
     (.stop c)))
+
+
+(defn setup! []
+  (with-db-conn op/create-jobs-table!
+    #_ (let [c (.start (conn/make-one))]
+         (op/create-jobs-table! c)
+         (.stop c))))
 
 
 (defn cleanup!
@@ -147,6 +156,9 @@
           (ts/put! (:publisher @SYS) {:queue-name "resumable_queue" :payload {:number (* i 2)}})
           (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number (* i 2)}}))
         (range 1 10))
+  (with-db-conn (fn [c]
+  (is (= :x (op/find-pending-jobs c {:queue-name "resumable_queue"})))
+  (is (= :x (op/queue-stats c)))))
   (let [other-syst (component/start-system (make-system "resumable_queue" alt-handler))]
     (Thread/sleep 7000)
     ;; only 9 here, because alt handler sends the data here
