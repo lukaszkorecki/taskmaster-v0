@@ -27,13 +27,15 @@
       res)))
 
 
+;; handler just checks if a number passed in is even.
+;; also calls a dependcy component (a function in this case)
 (defn handler [{:keys [payload component] :as job}]
   ((:injected-fn component) (dissoc job :component))
   (if (even? (:number payload))
     ::op/ack
     ::op/reject))
 
-
+;; alternative handler, just acks jobs
 (defn alt-handler [job]
   (swap! alt-queue-jobs conj (dissoc  job :component))
   ::op/ack)
@@ -88,8 +90,11 @@
             (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number 4}})
             (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number 6}})]))
     (ts/put! (:publisher @SYS) {:queue-name queue-name :payload {:number 1}}))
+  ;; since the consumers are not running immediately, we can inspect the queue depth
   (is (= {:count 4} (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+  ;; wait for it
   (Thread/sleep 2000)
+  ;; ...and done
   (is (= 4 (count @all-jobs)))
   (testing "it picks up and processes jobs"
     (testing "success jobs"
@@ -107,27 +112,32 @@
              (map #(select-keys % [:id :queue-name :payload]) @all-jobs))))))
 
 
-#_ (deftest failed-job-handling
-  (let [alt-syst (component/start-system (make-system "retrying_queue" handler))]
-    (testing "it doesn't try to run the failed job on restart"
+(deftest failed-job-handling
+  (let [queue-name "retrying_queue"
+        alt-syst (component/start-system (make-system queue-name handler))]
+    (testing "fails processing, it doesn't try to run the failed job on consumer restart"
+      ;; this wil fail, since :number is not even
       (ts/put! (:publisher @SYS) {:queue-name "retrying_queue" :payload {:number 1}})
       (Thread/sleep 2000)
-    (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
-    (is (= {:count 1}
-           (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
-    (is (= 1 (count @rejected-jobs)))
-    (component/stop alt-syst)
-    (component/start alt-syst)
-    (Thread/sleep 1000)
-    (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
-    (is (= {:count 1}
-           (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
-    (is (= 1 (count @rejected-jobs)))
-    (try
-      (Thread/sleep 2000)
+      ;; we got it
+      (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
+      (is (= {:count 1}
+             (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+      (is (= 1 (count @rejected-jobs)))
+      ;; verify that the issue with reprocessing previously failed jobs doesn't persist
       (component/stop alt-syst)
-      (catch Exception _
-        :noop)))))
+      (component/start alt-syst)
+      (Thread/sleep 1000)
+      ;; we have failed jobs, but we didn't consume them again
+      (is (= [1] (mapv #(-> %  :payload :number) @rejected-jobs)))
+      (is (= {:count 1}
+             (op/queue-size (:db-conn @SYS) {:queue-name queue-name})))
+      (is (= 1 (count @rejected-jobs)))
+      (try
+        (Thread/sleep 2000)
+        (component/stop alt-syst)
+        (catch Exception _
+          :noop)))))
 
 
 (deftest resume-consumption
