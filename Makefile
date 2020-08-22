@@ -25,4 +25,4 @@ test: start-services-bg
 
 
 lint: fmt
-	clj-kondo --lint ./
+	clj-kondo --lint ./src/
