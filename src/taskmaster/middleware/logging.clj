@@ -1,8 +1,13 @@
 (ns taskmaster.middleware.logging
-  (:require [taskmaster.operation :as op]
-   [clojure.tools.logging :as log]))
+  (:require
+    [clojure.tools.logging :as log]
+    [taskmaster.operation :as op]))
 
-(defn with-log [handler]
+
+(defn with-log
+  "Logging middleware - will log when job procesing (as done by the `handler` argument) starts, finishes and
+  how long it took"
+  [handler]
   (fn logger [{:keys [id queue-name] :as job}]
     (log/infof "queue=%s id=%s status=start" queue-name id)
     (let [start-time ^Long (System/currentTimeMillis)

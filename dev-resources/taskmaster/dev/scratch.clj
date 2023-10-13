@@ -1,14 +1,20 @@
-(require '[taskmaster.dev.connection :as c]
-         '[taskmaster.component :as com]
-         '[clojure.tools.logging :as log]
-         '[com.stuartsierra.component :as component])
+(ns user
+  (:require
+    [:reload]
+    [clojure.tools.logging :as log]
+    [com.stuartsierra.component :as component]
+    [taskmaster.component :as com]
+    [taskmaster.dev.connection :as c]
+    [taskmaster.operation :as op]))
 
 
-(def qs (atom []))
+(def ^{:doc "job log"} qs (atom []))
 
 
-(defn handler [{:keys [id queue-name payload component] :as job}]
-
+(defn handler
+  "Sample handler: if theres a number in :some-number key in the payload
+  and its even, ACK the job, otherwise fail it"
+  [{:keys [id queue-name payload component] :as _job}]
   (log/infof "got-job t=%s q=%s %s" component queue-name payload)
   (swap! qs conj id)
   (log/info (count (set @qs)))
@@ -19,23 +25,39 @@
     res))
 
 
-(def system
+(def ^{:doc "sample system"} system
   {:db-conn (c/make-one)
    :consumer (component/using
-              (com/create-consumer {:queue-name "t3"
-                                    :handler handler
-                                    :concurrency 2})
-              [:db-conn :some-thing])
+               (com/create-consumer {:queue-name "t3"
+                                     :handler handler
+                                     :concurrency 2})
+               [:db-conn :some-thing])
    :some-thing {:some :thing}
    :publisher (component/using
-               (com/create-publisher)
-               [:db-conn])})
+                (com/create-publisher)
+                [:db-conn])})
+
+
+(def system-publisher-only
+  {:db-conn (c/make-one)
+   #_ :consumer  #_ (component/using
+               (com/create-consumer {:queue-name "t3"
+                                     :handler handler
+                                     :concurrency 2})
+               [:db-conn :some-thing])
+   :publisher (component/using
+                (com/create-publisher)
+                [:db-conn])})
 
 
 (def SYS
   (component/start-system (component/map->SystemMap system)))
 
 
-(com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 2}})
+(def PUBSYS (component/start-system (component/map->SystemMap system-publisher-only)))
 
-(component/stop SYS)
+(com/put! (:publisher SYS) {:queue-name "t3" :payload {:some-number 1}})
+
+
+(taskmaster.operation/requeue! (:db-conn SYS)
+                               {:queue-name "t3" :id [46]})

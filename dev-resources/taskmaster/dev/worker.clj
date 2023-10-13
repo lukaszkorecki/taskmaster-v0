@@ -6,6 +6,8 @@
 
 (def c1 (.start (c/make-one)))
 
+(taskmaster.operation/create-jobs-table! c1)
+
 (def qs (atom []))
 
 

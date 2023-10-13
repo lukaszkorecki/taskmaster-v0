@@ -1,0 +1,3 @@
+{:lint-as {utility-belt.sql.helpers/with-transaction clojure.core/let}
+ :linters {:missing-docstring {:level :warning}
+           :single-key-in {:level :warning}}}

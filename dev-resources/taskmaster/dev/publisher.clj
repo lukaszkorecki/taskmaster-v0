@@ -1,5 +1,6 @@
 (require '[taskmaster.queue :as queue]
          '[taskmaster.dev.connection :as c]
+         '[clojure.string]
          '[clojure.tools.logging :as log] :reload)
 
 

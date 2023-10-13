@@ -1,129 +1,144 @@
 -- :name create-jobs-table*!  :!
-create table if not exists :i:table-name  (
-  id bigserial primary key,
-  queue_name text not null check(length(queue_name) > 0),
-  payload jsonb not null,
+CREATE TABLE if NOT EXISTS :i:table-name  (
+  id bigserial PRIMARY key,
+  queue_name text NOT NULL CHECK(LENGTH(queue_name) > 0),
+  payload jsonb NOT NULL,
   locked_at timestamptz,
-  locked_by integer,
-  run_count integer default 0,
-  created_at timestamptz default now()
+  locked_by INTEGER,
+  run_count INTEGER DEFAULT 0,
+  created_at timestamptz DEFAULT now()
 );
 
-create index if not exists
+CREATE index if NOT EXISTS
 
 --~ (str "idx_" (:table-name params) "_unlocked_jobs")
 
-on :i:table-name (queue_name, id, run_count)
+ON :i:table-name (queue_name, id, run_count)
 
-where locked_at is null;
+WHERE locked_at IS NULL;
 
 -- :name drop-jobs-table*! :!
-
-drop table if exists :i:table-name;
-drop function
+DROP TABLE if EXISTS :i:table-name;
+DROP FUNCTION
 --~ (str (:table-name params) "_notify()")
 ;
 
-drop trigger if exists
+DROP TRIGGER if EXISTS
 --~ (str (:table-name params) "_notify")
-on :i:table-name;
+ON :i:table-name;
 
 -- :name setup-triggers*! :!
-
-create or replace function
+CREATE OR replace FUNCTION
 
 --~ (str (:table-name params) "_notify()")
 
-returns trigger as $$ begin
-  perform pg_notify(new.queue_name, '');
-  return null;
-end $$ language plpgsql;
+RETURNS TRIGGER AS $$ BEGIN
+  perform pg_notify(NEW.queue_name, '');
+  RETURN NULL;
+END $$ LANGUAGE plpgsql;
 
-drop trigger if exists
+DROP TRIGGER if EXISTS
 
 --~ (str (:table-name params) "_notify")
 
-on :i:table-name;
+ON :i:table-name;
 
-create trigger
+CREATE TRIGGER
 --~ (str (:table-name params) "_notify")
-  after insert on :i:table-name for each row
-  execute procedure
+  AFTER INSERT ON :i:table-name FOR EACH ROW
+  EXECUTE PROCEDURE
 
 --~ (str (:table-name params) "_notify()")
 ;
 
 
 -- :name ping* :? :1
-
-select 1
+SELECT 1
 
 -- :name unlock-dead-consumers*! :!
 
-update :i:table-name
-  set locked_at = null, locked_by = null
+UPDATE :i:table-name
+  SET locked_at = NULL, locked_by = NULL
 
-where locked_by not in (select pid from pg_stat_activity);
+WHERE locked_by NOT IN (SELECT pid FROM pg_stat_activity);
 
--- :name find-pending-jobs* :?
+-- :name find-jobs* :?
 
-select * from :i:table-name
+SELECT * FROM :i:table-name
 
-where run_count = 0 and locked_by = null and queue_name = :queue-name
+WHERE
+  run_count = :run-count
+  AND queue_name = :queue-name
+
+-- :name get-by-ids* :?
+SELECT * FROM :i:table-name
+
+WHERE
+  run_count >= :min-run-count
+  AND id IN (:v*:id)
 
 -- :name put*! :<! :1
-insert into :i:table-name
-  (queue_name, payload) values (:queue-name, :payload)
-returning id
+INSERT INTO :i:table-name
+  (queue_name, payload) VALUES (:queue-name, :payload)
+RETURNING id
+
+-- :name put-many*! :<! :*
+
+INSERT INTO :i:table-name
+(queue_name, payload) VALUES :t*:payloads
+
 
 -- :name lock*! :<!
+WITH selected_job AS (
+  SELECT id
+    FROM :i:table-name
+  WHERE
+    locked_at IS NULL
+    AND queue_name = :queue-name
+    AND run_count = 0
 
-with selected_job as (
-  select id
-  from :i:table-name
-
-where
-locked_at is null and
-queue_name = :queue-name and
-run_count < 1
-
-for no key update skip locked
+    FOR NO key UPDATE SKIP LOCKED
 )
 
-update :i:table-name
-set
+UPDATE :i:table-name
+SET
   locked_at = now(),
   locked_by = pg_backend_pid()
-from selected_job
+FROM selected_job
 
-where :sql:table-name-id = selected_job.id
+WHERE :sql:table-name-id = selected_job.id
 
-returning *
+RETURNING *
 
 -- :name unlock*! :<!
 
-update :i:table-name
+UPDATE :i:table-name
 
-set locked_at = null, run_count = run_count + 1
+SET locked_at = NULL, run_count = run_count + 1
 
-where id = :id
+WHERE id = :id
 
--- :name delete-job*! :! :1
+-- :name delete-jobs*! :! :n
 
-delete from :i:table-name
+DELETE FROM :i:table-name
 
-where id = :id
+WHERE id IN  (:v*:id)
 
 -- :name delete-all*! :!
 
-delete from :i:table-name
+DELETE FROM :i:table-name
 
-where queue_name = :queue-name
+WHERE queue_name = :queue-name
 
 -- :name queue-size* :? :1
 
-select count(*) from :i:table-name where queue_name = :queue-name
+SELECT COUNT(*) FROM :i:table-name WHERE queue_name = :queue-name
+
+-- :name queue-stats* :? :*
+
+SELECT queue_name, COUNT(run_count), run_count > 0 AS is_failed FROM :i:table-name
+GROUP BY queue_name, run_count
 
 -- :name listen* :?
 
-listen :i:queue-name
+LISTEN :i:queue-name

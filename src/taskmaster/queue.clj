@@ -1,13 +1,13 @@
 (ns taskmaster.queue
   (:require
-   [clojure.string :as str]
-   [clojure.tools.logging :as log]
-   [taskmaster.operation :as op])
+    [clojure.string :as str]
+    [clojure.tools.logging :as log]
+    [taskmaster.operation :as op])
   (:import
-   (java.io
-    Closeable)
-   (java.util.concurrent
-    ConcurrentLinkedQueue)))
+    (java.io
+      Closeable)
+    (java.util.concurrent
+      ConcurrentLinkedQueue)))
 
 
 (defrecord Consumer [queue-name listener pool]
@@ -18,7 +18,9 @@
     (future-cancel listener)))
 
 
-(defn stop! [consumer]
+(defn stop!
+  "Stops the consumer, publishers are unstoppable"
+  [consumer]
   (.close ^Closeable consumer))
 
 
@@ -29,7 +31,16 @@
        (not (re-find #"\." q))))
 
 
-(defn start! [conn {:keys [queue-name handler concurrency]}]
+(defn start!
+  "Core job consuming and processing logic.
+  Resturns a Consumer record ,which holds the following
+  - listener thread which pulls notifications from PG, and then finds next suitable record (or records) to process
+    for given `queue-name` option
+  - a ConcurrentLinkedQueue instance which is used as an internal queue representation to
+    farily distribute individual payloads to multiple consumer threads (number is controlled by `concurrency` option
+  - each job is processed by a `handler` function, which receives a map of `{id payload queue-name}`
+  Consumer can be closed with `with-close` etc"
+  [conn {:keys [queue-name handler concurrency]}]
   {:pre [(pos? concurrency)
          (fn? handler)
          (valid-queue-name? queue-name)]}
@@ -40,10 +51,12 @@
         _ (log/infof "pool=starting queue-name=%s concurrency=%s" queue-name concurrency)
         ;; main listener, will notify other threads in the pool when something happens
         ;; then they will wake up and use locking semantics to pull jobs from the queue table
-        ;; and do whatever they must. Therefore at minimum the pool will have 2 threads per queue:
+        ;; and do whatever they must. Therefore at minimum the Consumer record instance will
+        ;; have 2 threads per queue:
         ;; 1 listener
         ;; 1 (at least) consumer, receiving messages from the blocking queue
-        ;; The pool is a simple collection of threads polling the shared Concurrentlinkedqueue
+        ;; Note: it's not a "real" thread pool, like j.u.c.ScheduledExecutorThreadPool - just a collection of
+        ;; threads, nothing more, nothing less
         on-error (fn [{:keys [queue-name error]}]
                    (log/errorf "%s fail" queue-name)
                    (log/error error))
@@ -53,11 +66,11 @@
         pool (future (mapv (fn [i]
                              (let [name (str "taskmaster-" queue-name "-" i)
                                    wrapped-handler (op/wrap-handler conn {:queue-name queue-name
-                                                                            :handler handler})
+                                                                          :handler handler})
                                    thr (Thread. (fn processor []
                                                   (log/infof "procesor=start name=%s" name)
                                                   (while true
-                                                    (when-let [el (.poll ^ConcurrentLinkedQueue queue)]
+                                                    (when-let [_item (.poll ^ConcurrentLinkedQueue queue)]
                                                       (wrapped-handler))
                                                     (Thread/sleep 25)))
                                                 name)]
@@ -70,7 +83,9 @@
     (->Consumer queue-name listener-thread @pool)))
 
 
-(defn put! [conn {:keys [queue-name payload]}]
+(defn put!
+  "Put a job on a queue - payload has to be JSON-able, or a string"
+  [conn {:keys [queue-name payload]}]
   {:pre [(valid-queue-name? queue-name)
          (map? payload)]}
   (log/debugf "put queue=%s job=%s" queue-name payload)
